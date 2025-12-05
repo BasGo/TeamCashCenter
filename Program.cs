@@ -53,10 +53,10 @@ builder.Services.AddBlazorBootstrap();
 builder.WebHost.ConfigureKestrel(options =>
 {
     options.ListenLocalhost(5000); // HTTP
-    options.ListenLocalhost(5001, listenOptions =>
-    {
-        listenOptions.UseHttps(); // HTTPS (development cert)
-    });
+    // options.ListenLocalhost(5001, listenOptions =>
+    // {
+    //     listenOptions.UseHttps(); // HTTPS (development cert)
+    // });
 });
 
 builder.Services.AddRazorPages();
@@ -115,7 +115,7 @@ if (!app.Environment.IsDevelopment())
 }
 
 // Redirect HTTP to HTTPS where available
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection();
 
 app.UseStaticFiles();
 app.UseRouting();
