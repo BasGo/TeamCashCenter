@@ -81,3 +81,11 @@ jobs:
           context: .
           push: true
           tags: ghcr.io/${{ steps.tag.outputs.repo_lc }}:${{ steps.tag.outputs.tag_lc }}
+
+      - name: Tag & push latest to GHCR
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          IMAGE=ghcr.io/${{ steps.tag.outputs.repo_lc }}:${{ steps.tag.outputs.tag_lc }}
+          LATEST=ghcr.io/${{ steps.tag.outputs.repo_lc }}:latest
+          docker tag "$IMAGE" "$LATEST"
+          docker push "$LATEST"
