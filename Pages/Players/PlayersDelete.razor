@@ -1,0 +1,42 @@
+@page "/players/delete/{Id:guid}"
+@using TeamCashCenter.Data
+@attribute [Authorize(Policy = "CanViewTransactions")]
+@inject NavigationManager Nav
+@inject CashCenterContext Db
+
+<h3>Konfirmation</h3>
+
+@if (user is null)
+{
+    <p>Nicht gefunden.</p>
+}
+else
+{
+    <div class="card p-3">
+        <p>Willst du den Spieler <strong>@user.FirstName @user.LastName</strong> löschen?</p>
+        <button class="btn btn-danger me-2" @onclick="Delete">Löschen</button>
+        <a class="btn btn-secondary" href="/players">Abbrechen</a>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private User? user;
+
+    protected override async Task OnInitializedAsync()
+    {
+        user = await Db.Users.FindAsync(Id);
+    }
+
+    private async Task Delete()
+    {
+        if (user != null)
+        {
+            Db.Users.Remove(user);
+            await Db.SaveChangesAsync();
+        }
+        Nav.NavigateTo("/players");
+    }
+}

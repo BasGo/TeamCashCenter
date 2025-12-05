@@ -1,0 +1,42 @@
+@page "/transactiontypes/delete/{Id:int}"
+@using TeamCashCenter.Data
+@attribute [Authorize(Roles = "Admin,Treasurer")]
+@inject NavigationManager Nav
+@inject CashCenterContext Db
+
+<h3>Bestätigung</h3>
+
+@if (type is null)
+{
+    <p>Nicht gefunden.</p>
+}
+else
+{
+    <div class="card p-3">
+        <p>Willst du die Buchungsart <strong>@type.Name</strong> löschen?</p>
+        <button class="btn btn-danger me-2" @onclick="Delete">Löschen</button>
+        <a class="btn btn-secondary" href="/transactiontypes">Abbrechen</a>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private TransactionType? type;
+
+    protected override async Task OnInitializedAsync()
+    {
+        type = await Db.TransactionTypes.FindAsync(Id);
+    }
+
+    private async Task Delete()
+    {
+        if (type != null)
+        {
+            Db.TransactionTypes.Remove(type);
+            await Db.SaveChangesAsync();
+        }
+        Nav.NavigateTo("/transactiontypes");
+    }
+}

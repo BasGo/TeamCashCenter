@@ -1,0 +1,134 @@
+@page "/memberships/edit/{Id:guid?}"
+@using TeamCashCenter.Data
+@using TeamCashCenter.Services
+@using TeamCashCenter.Services.Contracts
+@attribute [Authorize(Policy = "CanViewTransactions")]
+@inject IUserService userService
+@inject IMembershipService membershipService
+
+<div class="card">
+    <div class="card-body">
+        <h2 class="card-title">@(membership.Id == Guid.Empty ? "Neue Mitgliedschaft" : "Mitgliedschaft bearbeiten")</h2>
+
+        <EditForm Model="membership" OnValidSubmit="Save">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+            <div class="row align-items-start">
+                <div class="mb-3 col-6">
+                    <label class="form-label">Rolle</label>
+                    <InputSelect class="form-select" @bind-Value="membership.RoleId">
+                        @foreach (var r in roles) { <option value="@r.Id">@r.Name</option> }
+                    </InputSelect>
+                    <ValidationMessage For="() => membership.RoleId" />
+                </div>
+                <div class="mb-3 col-6">
+                    <label class="form-label">Monatsbeitrag</label>
+                    <CurrencyInput TValue="decimal" @bind-Value="membership.MonthlyFee" Locale="de-DE" Placeholder="Monatsbeitrag" ShowCurrencySymbol="true" />
+                    <ValidationMessage For="() => membership.MonthlyFee" />
+                </div>
+            </div>
+            <div class="row align-items-start">
+                <div class="mb-3 col-6">
+                    <label class="form-label">Start</label>
+                    <InputDate class="form-control" @bind-Value="membership.StartDate" />
+                    <ValidationMessage For="() => membership.StartDate" />
+                </div>
+                <div class="mb-3 col-6">
+                    <label class="form-label">Ende</label>
+                    <InputDate class="form-control" @bind-Value="membership.EndDate" />
+                </div>
+            </div>
+            <button class="btn btn-primary" type="submit">Speichern</button>
+            <a class="btn btn-secondary ms-2" href="/memberships">Abbrechen</a>
+        </EditForm>
+    </div>
+</div>
+
+@if (showSummary)
+{
+    <div class="card mt-3">
+        <div class="card-body">
+            <h5 class="card-title">Erzeugte / Aktualisierte Zahlungen</h5>
+            @foreach (var u in affectedMemberships.Keys)
+            {
+                @if (affectedMemberships[u].Added.Count > 0)
+                {
+                    <div>
+                        <strong>Hinzugefügt für @u.FirstName @u.LastName:</strong>
+                        <ul>
+                            @foreach (var p in affectedMemberships[u].Added.OrderBy(p => p.DueDate))
+                            {
+                                <li>@p.DueDate.ToString("yyyy-MM") | @p.Amount.ToString("C") | @p.Description</li>
+                            }
+                        </ul>
+                    </div>
+                }
+                @if (affectedMemberships[u].Updated.Count > 0)
+                {
+                    <div>
+                        <strong>Aktualisiert für @u.FirstName @u.LastName:</strong>
+                        <ul>
+                            @foreach (var p in affectedMemberships[u].Updated.OrderBy(p => p.DueDate))
+                            {
+                                <li>@p.DueDate.ToString("yyyy-MM") | @p.Amount.ToString("C") | @p.Description</li>
+                            }
+                        </ul>
+                    </div>
+                }
+                @if (affectedMemberships[u].Removed.Count > 0)
+                {
+                    <div>
+                        <strong>Entfernt für @u.FirstName @u.LastName:</strong>
+                        <ul>
+                            @foreach (var p in affectedMemberships[u].Removed.OrderBy(p => p.DueDate))
+                            {
+                                <li>@@p.DueDate.ToString("yyyy-MM") | @p.Amount.ToString("C") | @p.Description</li>
+                            }
+                        </ul>
+                    </div>
+                }
+            }
+
+            <div class="mt-3">
+                <a class="btn btn-primary" href="/memberships">Zurück zur Übersicht</a>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Guid? Id { get; set; }
+    
+    private Membership membership = new() { StartDate = DateTime.Today };
+    private IList<User> users = [];
+    private IList<Role> roles = [];
+
+    private Dictionary<User, MembershipService.AffectedPayments> affectedMemberships = new Dictionary<User, MembershipService.AffectedPayments>();
+    
+    private bool showSummary = false;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        var now = DateTime.Now;
+        roles = await userService.GetRolesAsync();
+        membership.RoleId = Guid.Empty;
+        membership.EndDate = now.Month < 6 ? new DateTime(now.Year, 6, 30) : new DateTime(now.Year + 1, 6, 30);
+        if (Id.HasValue)
+        {
+            var existing = await membershipService.GetByIdAsync(Id.Value);
+            if (existing != null) membership = existing;
+        }
+    }
+
+    private async Task Save()
+    {
+        if (membership.RoleId != Guid.Empty)
+        {
+            affectedMemberships = await membershipService.SaveMembership(membership);
+            
+            // show summary to user instead of immediate navigation
+            showSummary = true;
+        }
+    }
+}

@@ -1,0 +1,65 @@
+@page "/accounts/edit/{Id:guid?}"
+@using TeamCashCenter.Services.Contracts
+@attribute [Authorize(Policy = "CanViewTransactions")]
+@inject NavigationManager Nav
+@inject IAccountService accountService
+
+<div class="card">
+    <div class="card-body">
+        <h2 class="card-title">@(account.Id == Guid.Empty ? "Neues Konto" : "Konto bearbeiten")</h2>
+
+        <EditForm Model="account" OnValidSubmit="Save">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="mb-3">
+                <label class="form-label">Name</label>
+                <InputText class="form-control" @bind-Value="account.Name" />
+                <ValidationMessage For="() => account.Name" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Beschreibung</label>
+                <InputText class="form-control" @bind-Value="account.Description" />
+                <ValidationMessage For="() => account.Description" />
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">Kontonummer</label>
+                <InputText class="form-control" @bind-Value="account.AccountNumber" />
+                <ValidationMessage For="() => account.AccountNumber" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Startbetrag</label>
+                <CurrencyInput TValue="decimal" @bind-Value="account.StartBalance" Locale="de-DE" Placeholder="Betrag" ShowCurrencySymbol="true" />
+                <ValidationMessage For="() => account.StartBalance" />
+            </div>
+
+            <button class="btn btn-primary" type="submit">Speichern</button>
+            <a class="btn btn-secondary ms-2" href="/accounts">Abbrechen</a>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    private Account account = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Id.HasValue)
+        {
+            var existing = await accountService.GetByIdAsync(Id.Value);
+            if (existing != null) account = existing;
+        }
+    }
+
+    private async Task Save()
+    {
+        await accountService.UpsertAccountAsync(account);
+        Nav.NavigateTo("/accounts");
+    }
+}

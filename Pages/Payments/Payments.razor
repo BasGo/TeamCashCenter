@@ -1,0 +1,349 @@
+@page "/payments/{userId:guid?}"
+@using Microsoft.AspNetCore.Identity
+@using TeamCashCenter.Data
+@using TeamCashCenter.Services.Contracts
+@attribute [Authorize(Policy = "CanViewTransactions")]
+@inject CashCenterContext Db
+@inject UserManager<User> UserManager
+@inject ITransactionService transactionService
+
+@if (user != null)
+{
+    <h2 class="down-space">Offene Zahlungen für @user.DisplayName</h2>
+}
+else
+{
+    <h2>Geplante Zahlungen</h2>
+}
+
+@if (userId == null || userId == Guid.Empty)
+{
+    <a class="btn btn-primary mb-3" href="/payments/edit">Neue geplante Zahlung</a>
+}
+
+@if (payments is null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <table class="table">
+        <thead><tr><th>Beschreibung</th><th>Betrag</th><th>Fällig</th><th>Spieler</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+            @foreach (var p in payments)
+            {
+                <tr class="@(recentlyPaidId.HasValue && recentlyPaidId.Value == p.Id ? "table-success" : "")">
+                    <td>@p.Description</td>
+                    <td>@p.Amount.ToString("C")</td>
+                    <td>@p.DueDate.ToString("yyyy-MM-dd")</td>
+                    <td>@(p.User != null ? p.User.FirstName + " " + p.User.LastName : "-")</td>
+                    <td>
+                        @if (p.IsPaid)
+                        {
+                            <span class="badge bg-success">Bezahlt</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-warning text-dark">Offen</span>
+                        }
+                    </td>
+                    <td>
+                        <a class="btn btn-sm btn-secondary me-2" href="/payments/edit/@p.Id">Bearbeiten</a>
+                        <a class="btn btn-sm btn-danger me-2" href="/payments/delete/@p.Id">Löschen</a>
+                        @if (!p.IsPaid)
+                        {
+                            <button class="btn btn-sm btn-success" @onclick="() => OpenPayModal(p)">Ausgleichen</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@* Simple modal overlay to pay a payment *@
+@if (showPayModal && payTarget != null)
+{
+    <div class="modal d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Geplante Zahlung ausgleichen</h5>
+                    <button type="button" class="btn-close" aria-label="Close" @onclick="ClosePayModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Beschreibung</label>
+                        <div>@payTarget.Description</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Betrag</label>
+                        <div class="h5">@payTarget.Amount.ToString("C")</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Konto</label>
+                        <InputSelect class="form-select" @bind-Value="selectedAccountId">
+                            <option value="">-- auswählen --</option>
+                            @foreach (var a in accounts) { <option value="@a.Id">@a.Name</option> }
+                        </InputSelect>
+                        @if (selectedAccountId == Guid.Empty)
+                        {
+                            <div class="form-text text-danger">Bitte ein Konto auswählen.</div>
+                        }
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Buchungsart</label>
+                        <InputSelect class="form-select" @bind-Value="selectedTransactionTypeId">
+                            <option value="">-- auswählen --</option>
+                            @foreach (var t in types) { <option value="@t.Id">@t.Name</option> }
+                        </InputSelect>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Datum</label>
+                        <InputDate class="form-control" @bind-Value="payBookingDate" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="ClosePayModal">Abbrechen</button>
+                    <button class="btn btn-primary" @onclick="PrepareConfirmPay" disabled="@(selectedAccountId==Guid.Empty)">Zahlung erfassen</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* Confirmation modal *@
+@if (showConfirmModal && payTarget != null)
+{
+    <div class="modal d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Zahlung bestätigen</h5>
+                    <button type="button" class="btn-close" aria-label="Close" @onclick="() => showConfirmModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Bitte bestätigen Sie die Zahlung:</p>
+                    <ul>
+                        <li><strong>Beschreibung:</strong> @payTarget.Description</li>
+                        <li><strong>Betrag:</strong> @payTarget.Amount.ToString("C")</li>
+                        <li><strong>Konto:</strong> @(accounts.FirstOrDefault(a=>a.Id==selectedAccountId)?.Name ?? "-")</li>
+                        <li><strong>Datum:</strong> @payBookingDate.ToString("yyyy-MM-dd")</li>
+                        <li><strong>Buchungsart:</strong> @(types.FirstOrDefault(t=>t.Id==selectedTransactionTypeId)?.Name ?? "(keine)")</li>
+                    </ul>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => showConfirmModal = false">Abbrechen</button>
+                    <button class="btn btn-danger" @onclick="ConfirmPay">Zahlung endgültig erfassen</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* Undo alert *@
+@if (showUndo)
+{
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+        <div class="toast show" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+                <strong class="me-auto">Mannschaftskasse</strong>
+                <small>gerade</small>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close" @onclick="() => showUndo=false"></button>
+            </div>
+            <div class="toast-body">
+                @toastMessage
+                <div class="mt-2 pt-2 border-top">
+                    <button class="btn btn-sm btn-outline-primary me-2" @onclick="UndoLastPayment">Rückgängig</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+}
+
+@code {
+    private string toastMessage = string.Empty;
+    private System.Timers.Timer? toastTimer;
+
+    private void ShowToast(string message, int milliseconds = 5000)
+    {
+        toastMessage = message;
+        showUndo = true;
+        // auto-hide
+        toastTimer?.Stop();
+        toastTimer = new System.Timers.Timer(milliseconds) { AutoReset = false };
+        toastTimer.Elapsed += (s, e) =>
+        {
+            InvokeAsync(() => { showUndo = false; StateHasChanged(); });
+        };
+        toastTimer.Start();
+    }
+}
+
+@code {
+    [Parameter]
+    public Guid? userId { get; set; }
+    public User? user;
+    
+    private List<Payment>? payments;
+
+    private List<Account> accounts = new();
+    private List<TransactionType> types = new();
+
+    private bool showPayModal = false;
+    private Payment? payTarget;
+    private Guid selectedAccountId;
+    private Guid selectedMembershipId;
+    private DateTime payBookingDate = DateTime.Today;
+    private int? selectedTransactionTypeId;
+    private bool showConfirmModal = false;
+
+    // undo support: remember last transaction id and affected account/payment
+    private Guid? lastTransactionId;
+    private Guid? lastAccountId;
+    private Guid? lastPaymentId;
+    private bool showUndo = false;
+    private Guid? recentlyPaidId = null;
+
+    private void OpenPayModal(Payment p)
+    {
+        payTarget = p;
+        
+        // default to Vereinskonto if present
+        selectedAccountId = accounts.FirstOrDefault(a => a.Name == "Vereinskonto")?.Id ?? accounts.FirstOrDefault()?.Id ?? Guid.Empty;
+        selectedTransactionTypeId = p.TransactionTypeId;
+        payTarget.TransactionTypeId = selectedTransactionTypeId;
+        if (payTarget.MembershipId.HasValue)
+        {
+            selectedMembershipId = payTarget.MembershipId.Value;
+        }
+
+        payBookingDate = DateTime.Today;
+        showPayModal = true;
+    }
+
+    private void ClosePayModal()
+    {
+        showPayModal = false;
+        payTarget = null;
+    }
+
+    private bool isSaving = false;
+
+    private async Task ConfirmPay()
+    {
+        if (payTarget == null) return;
+        if (selectedAccountId == Guid.Empty) return;
+        if (isSaving) return;
+        isSaving = true;
+
+        var typeFee = await Db.TransactionTypes.FirstOrDefaultAsync(t => t.IsRegularFee);
+        if (typeFee != null) selectedTransactionTypeId = typeFee.Id;
+        
+        var t = new Transaction
+        {
+            BookingDate = payBookingDate,
+            Amount = payTarget.Amount,
+            AccountId = selectedAccountId,
+            UserId = payTarget.UserId,
+            Description = payTarget.Description
+        };
+
+        await transactionService.Insert(t);
+        
+
+        var pp = await Db.Payments.FindAsync(payTarget.Id);
+        if (pp != null)
+        {
+            pp.IsPaid = true;
+            Db.Payments.Update(pp);
+        }
+
+        await Db.SaveChangesAsync();
+
+        // remember for undo
+        lastTransactionId = t.Id;
+        lastAccountId = selectedAccountId;
+        lastPaymentId = payTarget.Id;
+        showUndo = true;
+        // create payment log
+        var log = new PaymentLog { Action = "Payment", TransactionId = t.Id, AccountId = selectedAccountId, PaymentId = payTarget.Id, Amount = t.Amount, Notes = "Paid via modal" };
+        Db.PaymentLogs.Add(log);
+        await Db.SaveChangesAsync();
+
+        // show toast instead of alert
+        ShowToast($"Zahlung {t.Amount:C} erfasst.");
+
+        // highlight recently paid item briefly
+        recentlyPaidId = payTarget.Id;
+        await LoadPaymentsAsync();
+        showConfirmModal = false;
+        ClosePayModal();
+        isSaving = false;
+    }
+
+    private void PrepareConfirmPay()
+    {
+        // set default transaction type if none chosen
+        if (selectedTransactionTypeId == 0 && types.Any())
+        {
+            // prefer an income type named like 'Mitgliedsbeitrag' or fallback to first
+            var pref = types.FirstOrDefault(t => t.Name != null && t.Name.Contains("Mitglied", StringComparison.OrdinalIgnoreCase));
+            selectedTransactionTypeId = pref?.Id ?? types.First().Id;
+        }
+        showConfirmModal = true;
+    }
+
+    private async Task UndoLastPayment()
+    {
+        if (!lastTransactionId.HasValue) return;
+        var tx = await Db.Transactions.FindAsync(lastTransactionId.Value);
+        if (tx != null)
+        {
+            await transactionService.Revoke(lastTransactionId.Value);
+           
+            // unmark payment
+            var pp = await Db.Payments.FindAsync(tx.Reference);
+            if (pp != null)
+            {
+                pp.IsPaid = false;
+                Db.Payments.Update(pp);
+            }
+            
+            await Db.SaveChangesAsync();
+
+            // log undo
+            var ulog = new PaymentLog { Action = "Undo", TransactionId = tx.Id, AccountId = tx.AccountId, PaymentId = tx.Reference, Amount = -tx.Amount, Notes = "Undo via UI" };
+            Db.PaymentLogs.Add(ulog);
+            await Db.SaveChangesAsync();
+        }
+
+        lastTransactionId = null; lastAccountId = null; lastPaymentId = null; showUndo = false;
+        recentlyPaidId = null;
+        await LoadPaymentsAsync();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        accounts = await Db.Accounts.ToListAsync();
+        types = await Db.TransactionTypes.ToListAsync();
+
+        if (userId != null && userId != Guid.Empty)
+        {
+            user = await UserManager.FindByIdAsync(userId.Value.ToString());
+        }
+
+        await LoadPaymentsAsync();
+    }
+
+    private async Task LoadPaymentsAsync()
+    {
+        var q = Db.Payments.Include(pp => pp.User).AsQueryable();
+        if (userId.HasValue)
+        {
+            q = q.Where(pp => pp.UserId == userId.Value);
+        }
+        payments = await q.OrderBy(pp => pp.DueDate).ToListAsync();
+    }
+}

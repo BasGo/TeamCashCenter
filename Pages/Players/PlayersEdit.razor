@@ -1,0 +1,74 @@
+@page "/players/edit/{Id:guid?}"
+@using TeamCashCenter.Data
+@attribute [Authorize(Policy = "CanViewTransactions")]
+@inject NavigationManager Nav
+@inject CashCenterContext Db
+
+<div class="card">
+    <div class="card-body">
+        <h2 class="card-title">@(!user.HasKey ? "Neuen Spieler anlegen" : "Spieler bearbeiten")</h2>
+
+        <EditForm Model="user" OnValidSubmit="Save">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Vorname</label>
+                    <InputText class="form-control" @bind-Value="user.FirstName" />
+                    <ValidationMessage For="() => user.FirstName" />
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Nachname</label>
+                    <InputText class="form-control" @bind-Value="user.LastName" />
+                    <ValidationMessage For="() => user.LastName" />
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Trikotnummer</label>
+                    <InputNumber class="form-control" @bind-Value="user.JerseyNumber" />
+                    <ValidationMessage For="() => user.JerseyNumber" />
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Geburtsdatum</label>
+                    <InputDate class="form-control" @bind-Value="user.BirthDate" />
+                    <ValidationMessage For="() => user.BirthDate" />
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Pass-Nummer</label>
+                    <InputText class="form-control" @bind-Value="user.PassportNumber" />
+                    <ValidationMessage For="() => user.PassportNumber" />
+                </div>
+            </div>
+
+            <button class="btn btn-primary" type="submit">Speichern</button>
+            <a class="btn btn-secondary ms-2" href="/players">Abbrechen</a>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    private User user = new();
+    protected override async Task OnInitializedAsync()
+    {
+        if (Id.HasValue)
+        {
+            var existing = await Db.Users.FindAsync(Id.Value);
+            if (existing != null) user = existing;
+        }
+    }
+
+    private async Task Save()
+    {
+        if (!user.HasKey) Db.Users.Add(user);
+        else Db.Users.Update(user);
+
+        await Db.SaveChangesAsync();
+        Nav.NavigateTo("/players");
+    }
+}

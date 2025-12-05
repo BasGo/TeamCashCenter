@@ -1,0 +1,42 @@
+@page "/accounts/delete/{Id:int}"
+@using TeamCashCenter.Data
+@attribute [Authorize(Policy = "CanViewTransactions")]
+@inject NavigationManager Nav
+@inject CashCenterContext Db
+
+<h3>Konfirmation</h3>
+
+@if (account is null)
+{
+    <p>Nicht gefunden.</p>
+}
+else
+{
+    <div class="card p-3">
+        <p>Willst du das Konto <strong>@account.Name</strong> wirklich löschen?</p>
+        <button class="btn btn-danger me-2" @onclick="Delete">Löschen</button>
+        <a class="btn btn-secondary" href="/accounts">Abbrechen</a>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Account? account;
+
+    protected override async Task OnInitializedAsync()
+    {
+        account = await Db.Accounts.FindAsync(Id);
+    }
+
+    private async Task Delete()
+    {
+        if (account != null)
+        {
+            Db.Accounts.Remove(account);
+            await Db.SaveChangesAsync();
+        }
+        Nav.NavigateTo("/accounts");
+    }
+}

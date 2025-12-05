@@ -1,0 +1,149 @@
+@page "/account/register"
+@using TeamCashCenter.Services
+@using Notification = TeamCashCenter.Services.Notification
+@inject IHttpClientFactory HttpFactory
+@inject IConfiguration Config
+@inject NotificationService NotificationService
+@inject NavigationManager Navigation
+
+<div class="d-flex justify-content-center">
+    <div class="card col-12 col-md-6">
+        <div class="card-body">
+            <h3 class="card-title">Register</h3>
+
+            <EditForm Model="model" OnValidSubmit="HandleRegister">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="mb-3">
+            <label class="form-label">Email</label>
+            <InputText class="form-control" @bind-Value="model.Email" />
+            <ValidationMessage For="() => model.Email" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Password</label>
+            <InputText type="password" class="form-control" @bind-Value="model.Password" />
+            <ValidationMessage For="() => model.Password" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Confirm Password</label>
+            <InputText type="password" class="form-control" @bind-Value="model.ConfirmPassword" />
+            <ValidationMessage For="() => model.ConfirmPassword" />
+        </div>
+
+                <button class="btn btn-primary" type="submit" disabled="@isSubmitting">
+                    @if (isSubmitting)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    }
+                    Register
+                </button>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+@code {
+    private RegisterModel model = new();
+
+    private bool isSubmitting = false;
+
+    private async Task HandleRegister()
+    {
+        if (model.Password != model.ConfirmPassword)
+        {
+            NotificationService.Set(new Notification { Message = "Passwords do not match.", Type = "error" });
+            return;
+        }
+
+        try
+        {
+            isSubmitting = true;
+            StateHasChanged();
+
+            var payload = new { email = model.Email, password = model.Password };
+            var client = HttpFactory.CreateClient("server");
+            var serverBase = Config["ServerBaseUrl"];
+            if (string.IsNullOrWhiteSpace(serverBase)) serverBase = client.BaseAddress?.ToString() ?? Navigation.BaseUri;
+            // Ensure absolute URL
+            Uri serverUri;
+            try
+            {
+                serverUri = new Uri(serverBase, UriKind.Absolute);
+            }
+            catch
+            {
+                serverUri = new Uri(Navigation.BaseUri);
+            }
+
+            // If running against localhost and port is default HTTPS (443) but our dev Kestrel uses 5001,
+            // adjust to 5001 to avoid connecting to system HTTPS on :443 which may refuse.
+            if (serverUri.IsLoopback && serverUri.Port == 443)
+            {
+                var builder = new UriBuilder(serverUri) { Port = 5001 };
+                serverUri = builder.Uri;
+            }
+
+            var registerUri = new Uri(serverUri, "api/account/register");
+
+            // Debug: surface the exact URL being used and the client's base address
+            NotificationService.Set(new Notification { Message = "Posting to: " + registerUri.ToString(), Type = "info" });
+            Console.WriteLine($"Register.razor: serverBase={serverBase}, client.BaseAddress={client.BaseAddress}, registerUri={registerUri}");
+
+            var resp = await client.PostAsJsonAsync(registerUri, payload);
+            if (!resp.IsSuccessStatusCode)
+            {
+                var text = await resp.Content.ReadAsStringAsync();
+                NotificationService.Set(new Notification { Message = string.IsNullOrWhiteSpace(text) ? "Registration failed" : text, Type = "error" });
+                return;
+            }
+
+            var doc = await resp.Content.ReadFromJsonAsync<System.Text.Json.JsonElement?>();
+            if (doc.HasValue)
+            {
+                if (doc.Value.TryGetProperty("succeeded", out var s) && s.GetBoolean())
+                {
+                    NotificationService.Set(new Notification { Message = "Registration successful", Type = "success" });
+                    Navigation.NavigateTo("/", true);
+                    return;
+                }
+
+                if (doc.Value.TryGetProperty("errors", out var errs) && errs.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    var messages = new System.Text.StringBuilder();
+                    foreach (var e in errs.EnumerateArray()) messages.AppendLine(e.GetString());
+                    NotificationService.Set(new Notification { Message = messages.ToString(), Type = "error" });
+                    return;
+                }
+            }
+
+            NotificationService.Set(new Notification { Message = "Registration failed", Type = "error" });
+        }
+        catch (Exception ex)
+        {
+            NotificationService.Set(new Notification { Message = "Registration failed: " + ex.Message, Type = "error" });
+            Console.Error.WriteLine(ex);
+        }
+        finally
+        {
+            isSubmitting = false;
+            StateHasChanged();
+        }
+    }
+
+    private class RegisterModel
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.EmailAddress]
+        public string? Email { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.MinLength(6)]
+        public string? Password { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Required]
+        public string? ConfirmPassword { get; set; }
+    }
+}

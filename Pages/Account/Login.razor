@@ -1,0 +1,140 @@
+@page "/account/login"
+@using System.Linq.Expressions
+@using System.Linq
+@using TeamCashCenter.Services
+@inject NavigationManager NavManager
+@inject ILogger<Login> Logger
+@inject NotificationService NotificationService
+@inject IJSRuntime Js
+
+<div class="d-flex justify-content-center">
+    <div class="card col-12 col-md-5">
+        <div class="card-body">
+            <h3 class="card-title">Login</h3>
+            <EditForm EditContext="_editContext" OnValidSubmit="HandleValidSubmit">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <div class="mb-3">
+                    <label class="form-label">E-Mail-Adresse</label>
+                    <InputText class="@FieldCssClassFor(() => model.Email)" @bind-Value="model.Email" />
+                    <ValidationMessage For="() => model.Email" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Passwort</label>
+                    <InputText type="password" class="@FieldCssClassFor(() => model.Password)" @bind-Value="model.Password" />
+                    <ValidationMessage For="() => model.Password" />
+                </div>
+
+                <div class="form-check mb-3">
+                    <InputCheckbox class="form-check-input" @bind-Value="model.RememberMe" />
+                    <label class="form-check-label">Auf diesem Gerät eingeloggt bleiben</label>
+                </div>
+
+                <div class="d-flex align-items-center gap-2">
+                    <button class="btn btn-primary" type="submit" disabled="@isSubmitting">
+                        @if (isSubmitting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        }
+                        Anmelden
+                    </button>
+                    <a class="btn btn-link" href="/account/register">Registrieren</a>
+                    <a class="btn btn-link" href="/account/password/forgot">Passwort vergessen?</a>
+                    <a class="btn btn-link" href="/account/password/reset">Mit Token zurücksetzen</a>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+@code {
+    private LoginModel model = new();
+
+
+    private bool isSubmitting = false;
+
+    private async Task HandleValidSubmit()
+    {
+        
+        try
+        {
+            isSubmitting = true;
+            StateHasChanged();
+            var req = new Models.LoginRequest { Email = model.Email, Password = model.Password, RememberMe = model.RememberMe, ReturnUrl = "/" };
+            
+            // Perform a full-page form POST so the auth cookie is set by the server
+            await Js.InvokeVoidAsync("submitLoginForm", req.Email ?? string.Empty, req.Password ?? string.Empty, req.RememberMe, req.ReturnUrl ?? string.Empty);
+            return;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Login error");
+            NotificationService.ShowError("An unexpected error occurred.");
+        }
+        finally
+        {
+            isSubmitting = false;
+            StateHasChanged();
+        }
+    }
+
+    private class LoginModel
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.EmailAddress]
+        public string? Email { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Required]
+        public string? Password { get; set; }
+
+        public bool RememberMe { get; set; }
+
+        public string? ReturnUrl { get; set; }
+    }
+
+    private EditContext? _editContext;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        _editContext = new EditContext(model);
+
+        // populate return url
+        var uri = NavManager.ToAbsoluteUri(NavManager.Uri);
+        if (Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query).TryGetValue("ReturnUrl", out var ru))
+        {
+            model.ReturnUrl = ru.ToString();
+        }
+
+        // show logged-out toast if redirected after logout
+        if (Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query).TryGetValue("loggedout", out var lo) && lo == "1")
+        {
+            NotificationService.ShowSuccess("Logged out");
+        }
+    }
+
+    private string FieldCssClassFor(Expression<Func<object?>> field)
+    {
+        var classes = "form-control";
+        try
+        {
+            if (_editContext != null)
+            {
+                var fi = FieldIdentifier.Create(field);
+                if (_editContext.GetValidationMessages(fi).Any())
+                {
+                    classes += " is-invalid";
+                }
+            }
+        }
+        catch
+        {
+            // ignored
+        }
+
+        return classes;
+    }
+}
+

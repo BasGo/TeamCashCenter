@@ -1,0 +1,60 @@
+@page "/players/details/{Id:guid?}"
+@using TeamCashCenter.Data
+@attribute [Authorize(Policy = "CanViewTransactions")]
+@inject CashCenterContext Db
+
+<h2>Offene Zahlungen</h2>
+
+@if (user is null)
+{
+    <p>Spieler nicht gefunden.</p>
+}
+else
+{
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5 class="card-title">@user.FirstName @user.LastName</h5>
+            <p class="card-text">Trikotnummer: @user.JerseyNumber</p>
+        </div>
+    </div>
+
+    <h4>Geplante Zahlungen</h4>
+    @if (planned is null || !planned.Any())
+    {
+        <p>Keine offenen geplanten Zahlungen.</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead><tr><th>Beschreibung</th><th>Betrag</th><th>Fällig</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var p in planned)
+                {
+                    <tr>
+                        <td>@p.Description</td>
+                        <td>@p.Amount.ToString("C")</td>
+                        <td>@p.DueDate.ToString("yyyy-MM-dd")</td>
+                        <td>@(p.IsPaid ? "Bezahlt" : "Offen")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private User? user;
+    private List<Payment>? planned;
+
+    protected override async Task OnInitializedAsync()
+    {
+        user = await Db.Users.FindAsync(Id);
+        if (user != null)
+        {
+            planned = await Db.Payments.Where(pp => pp.UserId == user.Id && !pp.IsPaid).ToListAsync();
+        }
+    }
+}

@@ -1,0 +1,67 @@
+@inject Services.NotificationService Notifications
+
+@if (Notifications.Notifications?.Count > 0)
+{
+    <div class="position-fixed top-0 end-0 p-3" style="z-index:1050">
+        @foreach (var n in Notifications.Notifications.ToList())
+        {
+            <div class="toast custom-toast fade show align-items-center text-white bg-@((n.Type == "error") ? "danger" : (n.Type == "info" ? "info" : "success")) border-0 mb-2" role="alert" aria-live="polite">
+                <div class="d-flex">
+                    <div class="toast-body">@n.Message</div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" aria-label="Close" @onclick="() => Dismiss(n)"></button>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private readonly Dictionary<Services.Notification, System.Timers.Timer> _timers = new();
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Notifications.Changed += OnNotificationsChanged;
+    }
+
+    private void OnNotificationsChanged()
+    {
+        InvokeAsync(() =>
+        {
+            // Start timers for any new notifications
+            foreach (var n in Notifications.Notifications.ToList())
+            {
+                if (_timers.ContainsKey(n))
+                    continue;
+
+                var t = new System.Timers.Timer(5000) { AutoReset = false };
+                t.Elapsed += (_, __) =>
+                {
+                    InvokeAsync(() => { Notifications.Remove(n); StateHasChanged(); });
+                    if (_timers.TryGetValue(n, out var existing)) { existing.Dispose(); _timers.Remove(n); }
+                };
+                _timers[n] = t;
+                t.Start();
+            }
+
+            // Remove timers for notifications that are gone
+            var toRemove = _timers.Keys.Except(Notifications.Notifications.ToList()).ToList();
+            foreach (var k in toRemove) { _timers[k].Dispose(); _timers.Remove(k); }
+
+            StateHasChanged();
+        });
+    }
+
+    private void Dismiss(Services.Notification n)
+    {
+        if (_timers.TryGetValue(n, out var t)) { t.Dispose(); _timers.Remove(n); }
+        Notifications.Remove(n);
+    }
+
+    public void Dispose()
+    {
+        Notifications.Changed -= OnNotificationsChanged;
+        foreach (var t in _timers.Values) t.Dispose();
+        _timers.Clear();
+    }
+}

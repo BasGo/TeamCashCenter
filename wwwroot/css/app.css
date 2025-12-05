@@ -1,0 +1,63 @@
+body { background-color: #f8f9fa; }
+.card-title { font-weight: 600;  }
+.container { max-width: 1600px; }
+h2 { margin-bottom: 40px }
+.card { border-radius: 0.6rem; }
+.jumbotron { background: linear-gradient(90deg,#ffffff,#f7f9fb); }
+.table td, .table th { vertical-align: middle; }
+
+.bg-gradient { background: linear-gradient(90deg, #e9f2ff, #ffffff); }
+.text-primary { color: #0d6efd !important; }
+.form-label { font-weight: 600; }
+.app-container { max-width: 1100px; }
+.card .card-body small { color: #6c757d; }
+
+.navbar-toggler { border: none; }
+.navbar-toggler-icon { background-image: url("data:image/svg+xml;charset=utf8,%3Csvg viewBox='0 0 30 30' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath stroke='rgba%280,0,0,0.7%29' stroke-width='2' stroke-linecap='round' stroke-miterlimit='10' d='M4 7h22M4 15h22M4 23h22'/%3E%3C/svg%3E"); }
+.nav-link { font-weight: 600; }
+.bi { vertical-align: -.125em; margin-right: .25rem; }
+
+.user-label-truncate {
+	max-width: 160px; /* ~20 chars */
+	display: inline-block;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	vertical-align: middle;
+}
+
+.user-initials {
+	width: 28px;
+	height: 28px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 50%;
+	background: #0d6efd;
+	color: #fff;
+	font-weight: 700;
+	margin-right: .5rem;
+	font-size: 0.85rem;
+}
+
+.nav .nav-link.d-flex .user-label-truncate { max-width: 120px; }
+
+/* Toast appearance tweaks */
+.toast.custom-toast {
+	min-width: 260px;
+	max-width: 360px;
+	box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+	transform-origin: top right;
+	animation: toast-in 240ms ease-out;
+}
+
+@keyframes toast-in {
+	from { opacity: 0; transform: translateY(-8px) scale(.98); }
+	to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.toast.custom-toast .toast-body { font-size: 0.95rem; }
+
+
+
+

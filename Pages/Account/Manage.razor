@@ -1,0 +1,228 @@
+@page "/account/manage"
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Identity
+@using TeamCashCenter.Services
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserManager<User> UserManager
+@inject NotificationService NotificationService
+
+<h2>Benutzerkonto</h2>
+
+@if (userEmail == null)
+{
+  <p>Lade ...</p>
+}
+else
+{
+  <div class="card">
+    <div class="card-body">
+      <h2 class="card-title">Aktuelle Daten</h2>
+
+      <p><strong>E-Mail-Adresse:</strong> @currentUser?.Email</p>
+      <p><strong>Benutzername:</strong> @currentUser?.UserName</p>
+      
+      <EditForm Model="currentUser" OnValidSubmit="ChangeUsername">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <h4 class="mt-4">Benutzerdaten ändern</h4>
+        @if (currentUser != null)
+        {
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Benutzername</label>
+              <InputText class="form-control" @bind-Value="currentUser.UserName" />
+              <ValidationMessage For="() => currentUser.UserName" />
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">E-Mail-Adresse</label>
+              <InputText class="form-control" @bind-Value="currentUser.Email" />
+              <ValidationMessage For="() => currentUser.Email"/>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Vorname</label>
+              <InputText class="form-control" @bind-Value="currentUser.FirstName" />
+              <ValidationMessage For="() => currentUser.FirstName" />
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Nachname</label>
+              <InputText class="form-control" @bind-Value="currentUser.LastName" />
+              <ValidationMessage For="() => currentUser.LastName" />
+            </div>
+          </div>
+              
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Geburtsdatum</label>
+              <InputDate class="form-control" @bind-Value="currentUser.BirthDate"/>
+              <ValidationMessage For="() => currentUser.BirthDate"/>
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Telefon</label>
+              <InputText class="form-control" @bind-Value="currentUser.PhoneNumber" />
+              <ValidationMessage For="() => currentUser.PhoneNumber" />
+            </div>
+          </div>
+
+          <button class="btn btn-primary" type="submit">Speichern</button>
+          <a class="btn btn-secondary ms-2" href="/transactions">Abbrechen</a>
+        }
+            
+      </EditForm>
+      
+      <EditForm Model="newPasswordModel" OnValidSubmit="ChangePassword">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+        
+        <h4 class="mt-4">Passwort ändern</h4>
+        @if (currentUser != null && newPasswordModel != null)
+        {
+          <div class="row">
+            <div class="mb-3">
+              <label class="form-label">Aktuelles Passwort</label>
+              <InputText class="form-control" @bind-Value="newPasswordModel.CurrentPassword" />
+              <ValidationMessage For="() => newPasswordModel.CurrentPassword" />
+            </div>
+          </div>
+          
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Neues Passwort</label>
+              <InputText class="form-control" @bind-Value="newPasswordModel.NewPassword1" />
+              <ValidationMessage For="() => newPasswordModel.NewPassword1" />
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Neues Passwort (Wiederholung)</label>
+              <InputText class="form-control" @bind-Value="newPasswordModel.NewPassword2" />
+              <ValidationMessage For="() => newPasswordModel.NewPassword2"/>
+            </div>
+          </div>
+         
+          <button class="btn btn-primary" type="submit">Speichern</button>
+          <a class="btn btn-secondary ms-2" href="/transactions">Abbrechen</a>
+        }
+      </EditForm>
+    </div>
+  </div>
+}
+
+@code {
+  private User? currentUser;
+  
+  private string? userEmail;
+  private NewPasswordModel? newPasswordModel = new();
+  
+  protected override async Task OnInitializedAsync()
+  {
+    var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+    var user = auth.User;
+    if (user.Identity?.IsAuthenticated == true)
+    {
+      userEmail = user.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? user.FindFirst("email")?.Value;
+      if (!string.IsNullOrWhiteSpace(userEmail))
+      {
+        currentUser = await UserManager.FindByEmailAsync(userEmail);
+      }
+      else
+      {
+        currentUser = null;
+      }
+    }
+  }
+
+  private async Task ChangePassword()
+  {
+    if (string.IsNullOrWhiteSpace(userEmail)) return;
+    
+    try
+    {
+      var u = await UserManager.FindByEmailAsync(userEmail);
+      if (u != null && currentUser != null && newPasswordModel != null)
+      {
+        if (newPasswordModel.NewPassword1 != newPasswordModel.NewPassword2)
+        {
+          NotificationService.ShowError("Die eingegebenen neuen Passwörter stimmen nicht überein.");
+          return;
+        }
+        u.UserName = currentUser.UserName;
+        u.Email = currentUser.Email;
+        u.FirstName = currentUser.FirstName;
+        u.LastName = currentUser.LastName;
+        u.BirthDate = currentUser.BirthDate;
+        u.PhoneNumber = currentUser.PhoneNumber;
+
+        if (newPasswordModel.CurrentPassword != null && newPasswordModel.NewPassword1 != null)
+        {
+          var result = await UserManager.ChangePasswordAsync(u, newPasswordModel.CurrentPassword, newPasswordModel.NewPassword1);
+          if (result.Succeeded)
+          {
+            NotificationService.ShowSuccess("Das Passwort wurde erfolgreich geändert.");
+          }
+          else
+          {
+            NotificationService.ShowError(string.Join("; ", result.Errors.Select(e => e.Description)));
+          }
+          
+        }
+
+        await OnInitializedAsync();
+      }
+    }
+    catch (Exception e)
+    {
+      NotificationService.ShowError($"Fehler beim Ändern des Passworts: {e.Message}");
+    }
+  }
+
+  private async Task ChangeUsername()
+  {
+    if (string.IsNullOrWhiteSpace(userEmail)) return;
+    
+    try
+    {
+      var u = await UserManager.FindByEmailAsync(userEmail);
+      if (u != null && currentUser != null)
+      {
+        u.UserName = currentUser.UserName;
+        u.Email = currentUser.Email;
+        u.FirstName = currentUser.FirstName;
+        u.LastName = currentUser.LastName;
+        u.BirthDate = currentUser.BirthDate;
+        u.PhoneNumber = currentUser.PhoneNumber;
+
+        var result = await UserManager.UpdateAsync(u);
+        if (result.Succeeded)
+        {
+          userEmail = u.Email;
+          NotificationService.ShowSuccess("Die Daten wurden erfolgreich geändert.");
+        }
+        else
+        {
+          NotificationService.ShowError(string.Join("; ", result.Errors.Select(e => e.Description)));
+        }
+        await OnInitializedAsync();
+      }
+    }
+    catch (Exception e)
+    {
+      NotificationService.ShowError($"Fehler beim Speichern der Daten: {e.Message}");
+    }
+  }
+  
+  public class NewPasswordModel
+  {
+    [Required]
+    public string? CurrentPassword { get; set; }
+
+    [Required]
+    [MinLength(6)]
+    public string? NewPassword1 { get; set; }
+    
+    [Required]
+    [MinLength(6)]
+    public string? NewPassword2 { get; set; }
+  }
+}

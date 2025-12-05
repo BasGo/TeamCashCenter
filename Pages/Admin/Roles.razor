@@ -1,0 +1,236 @@
+@page "/admin/roles"
+@using Microsoft.AspNetCore.Identity
+@using System.Linq
+@using TeamCashCenter.Data
+@using TeamCashCenter.Services
+@using TeamCashCenter.Services.Contracts
+@attribute [Authorize(Roles = "Admin")]
+@inject UserManager<User> UserManager
+@inject RoleManager<Role> RoleManager
+@inject NotificationService NotificationService
+@inject CashCenterContext Db
+@inject IUserService userService
+
+<PageTitle>Rollenverwaltung</PageTitle>
+
+<h2>Rollenverwaltung</h2>
+
+<h4 class="mt-4">Neue Rolle erstellen</h4>
+
+<div class="mb-3">
+    <div class="d-flex gap-2">
+        <input class="form-control" @bind="newRoleName" placeholder="Name" />
+        <input class="form-control" @bind="newRoleDescription" placeholder="Beschreibung" />
+        <button class="btn btn-primary" @onclick="CreateRole">Erstellen</button>
+    </div>
+</div>
+<br />
+<h4>Vorhandene Rollen</h4>
+@if (roles is null)
+{
+    <p>Lade ...</p>
+}
+else
+{
+    <table class="table table-bordered">
+        <thead><tr><th>Name</th><th>Beschreibung</th><th></th></tr></thead>
+        <tbody>
+            @foreach (var r in roles)
+            {
+                <tr>
+                    <td>@r.Name</td>
+                    <td>@r.Description</td>
+                    <td>
+                        <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDeleteRole(r.Name)">Löschen</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@* Delete confirmation modal *@
+@if (showDeleteConfirm && pendingDeleteRole != null)
+{
+    <div class="modal d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Rolle löschen</h5>
+                    <button type="button" class="btn-close" aria-label="Close" @onclick="CloseDeleteConfirm"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Bist du sicher, dass die Rolle '<strong>@pendingDeleteRole</strong>' gelöscht werden soll? Diese Aktion kann nicht rückgängig gemacht werden.</p>
+                    <div class="form-check mt-2">
+                        <InputCheckbox class="form-check-input" @bind-Value="forceDelete" />
+                        <label class="form-check-label">Erzwingen: entferne die Rolle vor dem Löschen von allen Benutzern.</label>
+                    </div>
+                    @if (forceDelete)
+                    {
+                        <div class="alert alert-warning mt-2">Dies betrifft <strong>@pendingDeleteCount</strong> Benutzer, denen die Rolle vor dem Löschen entzogen wird.</div>
+                        <div class="form-check mt-2">
+                            <InputCheckbox class="form-check-input" @bind-Value="acknowledgeForceDelete" />
+                            <label class="form-check-label">Ich habe verstanden, dass <strong>@pendingDeleteCount</strong> Benutzer betroffen sind.</label>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseDeleteConfirm">Abbrechen</button>
+                    <button class="btn btn-danger" @onclick="DeleteRoleConfirmed">Rolle löschen</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Role>? roles;
+    private List<User>? users;
+    private Dictionary<Guid, HashSet<string>> userRoles = new();
+
+    private string newRoleName = string.Empty;
+    private string newRoleDescription = string.Empty;
+    //private string? deleteError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        roles = await RoleManager.Roles.OrderBy(r => r.Name).ToListAsync();
+        
+        // Load users directly from the DbContext to avoid any unexpected filtering from UserManager
+        users = await Db.Users.OrderBy(u => u.Email).ToListAsync();
+
+        userRoles.Clear();
+        foreach (var u in users)
+        {
+            var assigned = new HashSet<string>(await UserManager.GetRolesAsync(u));
+            userRoles[u.Id] = assigned;
+        }
+    }
+    
+    private async Task CreateRole()
+    {
+        if (string.IsNullOrWhiteSpace(newRoleName))
+        {
+            NotificationService.ShowError("Name darf nicht leer sein");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(newRoleDescription))
+        {
+            NotificationService.ShowError("Beschreibung darf nicht leer sein");
+            return;
+        }
+
+        if (await RoleManager.RoleExistsAsync(newRoleName))
+        {
+            NotificationService.ShowError("Rolle existiert bereits");
+            return;
+        }
+
+        var res = await RoleManager.CreateAsync(new Role(newRoleName, newRoleDescription));
+        if (res.Succeeded)
+        {
+            NotificationService.ShowSuccess($"Rolle '{newRoleName}' erstellt.");
+            newRoleName = string.Empty;
+            newRoleDescription = string.Empty;
+            await LoadAsync();
+        }
+        else
+        {
+            NotificationService.ShowError(string.Join("; ", res.Errors.Select(e => e.Description)));
+        }
+    }
+
+    private string? pendingDeleteRole;
+    private bool showDeleteConfirm;
+    private bool forceDelete;
+    private int pendingDeleteCount;
+    private bool acknowledgeForceDelete;
+    private IList<User>? usersToDelete;
+
+    private async Task ConfirmDeleteRole(string? roleName)
+    {
+        if (string.IsNullOrWhiteSpace(roleName)) return;
+        pendingDeleteRole = roleName;
+        forceDelete = false;
+        acknowledgeForceDelete = false;
+        usersToDelete = null;
+        pendingDeleteCount = 0;
+        
+        // preload users in role for informational purposes
+        var list = await userService.GetUsersInRoleAsync(roleName);
+        usersToDelete = list;
+        pendingDeleteCount = list?.Count ?? 0;
+        showDeleteConfirm = true;
+    }
+
+    private void CloseDeleteConfirm()
+    {
+        pendingDeleteRole = null;
+        showDeleteConfirm = false;
+    }
+
+    private async Task CloseModal()
+    {
+        CloseDeleteConfirm();
+        forceDelete = false;
+        acknowledgeForceDelete = false;
+        usersToDelete = null;
+        pendingDeleteCount = 0;
+        await LoadAsync();
+    }
+    private async Task DeleteRoleConfirmed()
+    {
+        if (string.IsNullOrWhiteSpace(pendingDeleteRole)) return;
+        var role = await RoleManager.FindByNameAsync(pendingDeleteRole);
+        if (role == null) { CloseDeleteConfirm(); return; }
+        
+        // prevent deleting built-in Admin role accidentally
+        if (string.Equals(pendingDeleteRole, "Admin", StringComparison.OrdinalIgnoreCase))
+        {
+            NotificationService.ShowError("Die Rolle 'Admin' kann nicht gelöscht werden.");
+            await CloseModal();
+            return;
+        }
+
+        // If usersToDelete was preloaded, use it; otherwise fetch
+        var usersInRole = usersToDelete ?? await userService.GetUsersInRoleAsync(pendingDeleteRole);
+        if (usersInRole.Count > 0)
+        {
+            if (!forceDelete)
+            {
+                NotificationService.ShowError($"Die Rolle '{pendingDeleteRole}' kann nicht gelöscht werden, weil ihr noch Benutzer zugeordnet sind. Benutze 'Erzwingen' um die Zuweisungen ebenfalls zu entfernen.");
+                await CloseModal();
+                return;
+            }
+
+            if (!acknowledgeForceDelete)
+            {
+                NotificationService.ShowError($"Bitte bestätige, dass Benutzerzuweisungen vom erzwungenen Löschen der Rolle '{pendingDeleteRole}' betroffen sein werden.");
+                await CloseModal();
+                return;
+            }
+
+            // remove role from all users
+            foreach (var u in usersInRole)
+            {
+                await UserManager.RemoveFromRoleAsync(u, pendingDeleteRole);
+            }
+        }
+
+        var delRes = await RoleManager.DeleteAsync(role);
+        if (delRes.Succeeded)
+        {
+            NotificationService.ShowSuccess($"Rolle '{pendingDeleteRole}' wurde gelöscht.");
+            await CloseModal();
+            return;
+        }
+
+        NotificationService.ShowError($"Fehler beim Löschen der Rolle: {string.Join(';', delRes.Errors.Select(e => e.Description))}");
+        await CloseModal();
+    }
+}

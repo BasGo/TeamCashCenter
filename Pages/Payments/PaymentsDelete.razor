@@ -1,0 +1,42 @@
+@page "/payments/delete/{Id:guid}"
+@using TeamCashCenter.Data
+@attribute [Authorize(Policy = "CanViewTransactions")]
+@inject NavigationManager Nav
+@inject CashCenterContext Db
+
+<h3>Bestätigung</h3>
+
+@if (payment is null)
+{
+    <p>Nicht gefunden.</p>
+}
+else
+{
+    <div class="card p-3">
+        <p>Willst du die geplante Zahlung <strong>@payment.Description</strong> löschen?</p>
+        <button class="btn btn-danger me-2" @onclick="Delete">Löschen</button>
+        <a class="btn btn-secondary" href="/payments">Abbrechen</a>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private Payment? payment;
+
+    protected override async Task OnInitializedAsync()
+    {
+        payment = await Db.Payments.FindAsync(Id);
+    }
+
+    private async Task Delete()
+    {
+        if (payment != null)
+        {
+            Db.Payments.Remove(payment);
+            await Db.SaveChangesAsync();
+        }
+        Nav.NavigateTo("/payments");
+    }
+}

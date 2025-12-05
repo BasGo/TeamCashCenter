@@ -1,0 +1,46 @@
+@page "/memberships/delete/{Id:int}"
+@using TeamCashCenter.Data
+@attribute [Authorize(Policy = "CanViewTransactions")]
+@inject NavigationManager Nav
+@inject CashCenterContext Db
+
+<h3>Bestätigung</h3>
+
+@if (membership is null)
+{
+    <p>Nicht gefunden.</p>
+}
+else
+{
+    <div class="card p-3">
+        <p>Willst du die Mitgliedschaft von <strong>@membership.Role.Name</strong> löschen?</p>
+        <button class="btn btn-danger me-2" @onclick="Delete">Löschen</button>
+        <a class="btn btn-secondary" href="/memberships">Abbrechen</a>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private Membership? membership;
+
+    protected override async Task OnInitializedAsync()
+    {
+        membership = await Db.Memberships.Include(m => m.Role).FirstOrDefaultAsync(m => m.Id == Id);
+    }
+
+    private async Task Delete()
+    {
+        if (membership != null)
+        {
+            // should delete payments
+            //TODO Handle payed payments -> soft delete memberships
+            var payments = Db.Payments.Where(p => p.MembershipId == membership.Id).ToList();
+            Db.Payments.RemoveRange(payments);
+            Db.Memberships.Remove(membership);
+            await Db.SaveChangesAsync();
+        }
+        Nav.NavigateTo("/memberships");
+    }
+}

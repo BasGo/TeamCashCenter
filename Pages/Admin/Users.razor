@@ -1,0 +1,488 @@
+@page "/admin/users"
+@using Microsoft.AspNetCore.Identity
+@using System.Linq
+@using System.Text.RegularExpressions
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.Extensions.Options
+@using TeamCashCenter.Data
+@using TeamCashCenter.Services
+@using TeamCashCenter.Services.Contracts
+@attribute [Authorize(Roles = "Admin")]
+@inject UserManager<User> UserManager
+@inject NotificationService NotificationService
+@inject CashCenterContext Db
+@inject RoleManager<Role> RoleManager
+@inject IMembershipService membershipService
+@inject IOptions<AppOptions> appOptions
+
+<PageTitle>Benutzerverwaltung</PageTitle>
+
+<h2>Benutzerverwaltung</h2>
+
+<h4 class="mt-4">Neuen Benutzer erstellen</h4>
+
+<div class="mb-3">
+    <div class="d-flex gap-2">
+        <input class="form-control" @bind="newUserFirstName" placeholder="Vorname" />
+        <input class="form-control" @bind="newUserLastName" placeholder="Nachname" />
+        <input class="form-control" @bind="newUserMail" placeholder="E-Mail-Adresse" />
+        <button class="btn btn-primary" @onclick="CreateUser">Erstellen</button>
+    </div>
+</div>
+<br />
+<h4 class="mt-4">Vorhandene Benutzer</h4>
+<div class="mb-3 d-flex">
+    <input class="form-control me-2" placeholder="Benutzer mit Hilfe ihrer E-Mail-Adresse suchen" @bind="userSearch" />
+    <button class="btn btn-outline-secondary" @onclick="() => userSearch = string.Empty">Leeren</button>
+</div>
+@if (users is null)
+{
+    <p>Lade ...</p>
+}
+else
+{
+    <table class="table table-bordered">
+        <thead>
+        <tr>
+            <th>Vorname</th>
+            <th>Nachname</th>
+            <th>Benutzername</th>
+            <th>E-Mail-Adresse</th>
+            <th>Geburtsdatum</th>
+            <th>Trikotnummer</th>
+            <th>Rollen</th>
+            <th style="width: 200px"></th>
+        </tr>
+        </thead>
+        <tbody>
+            @foreach (var u in users.Where(u => string.IsNullOrEmpty(userSearch) || (u.Email ?? string.Empty).Contains(userSearch, StringComparison.OrdinalIgnoreCase)))
+            {
+                <tr class="@(UserCssClassForRow(u))">
+                    <td>@u.FirstName</td>
+                    <td>@u.LastName</td>
+                    <td>@u.UserName</td>
+                    <td>@u.Email</td>
+                    <td>@(u.BirthDate.HasValue ? u.BirthDate.Value.ToString("dd.MM.yyyy") : "-")</td>
+                    <td>@(u.JerseyNumber is 0 or null ? "-" : u.JerseyNumber)</td>
+                    <td>@(string.Join(", ", userRoles[u.Id]))</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary me-2" @onclick="() => OpenEditUser(u)">Bearbeiten</button>
+                        <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDeleteUser(u)">Löschen</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@* Delete confirmation modal *@
+@if (showDeleteConfirm && pendingDeleteUser != null)
+{
+    <div class="modal d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Benutzer löschen</h5>
+                    <button type="button" class="btn-close" aria-label="Close" @onclick="CloseDeleteConfirm"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Bist du sicher, dass du den Benutzer '<strong>@pendingDeleteUser.FirstName @pendingDeleteUser.LastName</strong>' gelöscht werden soll? Diese Aktion kann nicht rückgängig gemacht werden.</p>
+                    
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseDeleteConfirm">Abbrechen</button>
+                    <button class="btn btn-danger" @onclick="DeleteRoleConfirmed">Benutzer löschen</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* Edit user modal *@
+@if (showEditDialog && editUser != null)
+{
+    <div class="modal d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit User</h5>
+                    <button type="button" class="btn-close" aria-label="Close" @onclick="CloseEditDialog"></button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="editModel" OnValidSubmit="SaveEdit">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary />
+
+                        <div class="mb-3">
+                            <label class="form-label">E-Mail-Adresse</label>
+                            <InputText class="form-control" @bind-Value="editModel.Email" />
+                            <ValidationMessage For="() => editModel.Email" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Benutzername</label>
+                            <InputText class="form-control" @bind-Value="editModel.UserName" />
+                            <ValidationMessage For="() => editModel.UserName" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Vorname</label>
+                            <InputText class="form-control" @bind-Value="editModel.FirstName" />
+                            <ValidationMessage For="() => editModel.FirstName" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Nachname</label>
+                            <InputText class="form-control" @bind-Value="editModel.LastName" />
+                            <ValidationMessage For="() => editModel.LastName" />
+                        </div>
+                        @if (editModel.PasswordEnabled)
+                        {
+                            <div class="mb-3">
+                                <label class="form-label">Passwort</label>
+                                <InputText class="form-control" @bind-Value="editModel.Password" />
+                                <ValidationMessage For="() => editModel.Password" />
+                            </div>
+                        }
+                        
+                        @if (roles is { Count: > 0 })
+                        {
+                            <div class="mb-3">
+                                <label class="form-label">Roles</label>
+                                <div>
+                                    @foreach (var rn in roles.Select(r => r.Name ?? string.Empty))
+                                    {
+                                        <div class="form-check">
+                                            <InputCheckbox class="form-check-input" @bind-Value="editRoleSelections[rn]" />
+                                            <label class="form-check-label">@rn</label>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        <div class="form-check mb-2">
+                            <InputCheckbox class="form-check-input" @bind-Value="editModel.EmailConfirmed" />
+                            <label class="form-check-label">E-Mail-Adresse bestätigt</label>
+                        </div>
+                        <div class="form-check mb-2">
+                            <InputCheckbox class="form-check-input" @bind-Value="editModel.LockoutEnabled" />
+                            <label class="form-check-label">Aussperrung aktiviert</label>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-secondary" @onclick="CloseEditDialog" type="button">Abbrechen</button>
+                            <button class="btn btn-primary" type="submit" disabled="@savingEdit">@(savingEdit ? "Speichere ..." : "Speichern")</button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<User>? users;
+    private readonly Dictionary<Guid, HashSet<string>> userRoles = new();
+    private List<Role>? roles;
+    
+    private string newUserFirstName = string.Empty;
+    private string newUserLastName = string.Empty;
+    private string newUserMail = string.Empty;
+    private string userSearch = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        // Load users directly from the DbContext to avoid any unexpected filtering from UserManager
+        users = await Db.Users.OrderBy(u => u.Email).ToListAsync();
+
+        // load available roles for UI
+        roles = await RoleManager.Roles.OrderBy(r => r.Name).ToListAsync();
+
+        userRoles.Clear();
+        foreach (var u in users)
+        {
+            var assigned = new HashSet<string>(await UserManager.GetRolesAsync(u));
+            userRoles[u.Id] = assigned;
+        }
+    }
+
+    private async Task CreateUser()
+    {
+        newUserFirstName = newUserFirstName.Trim();
+        newUserLastName = newUserLastName.Trim();
+        newUserMail = newUserMail.ToLower().Trim();
+        
+        if (string.IsNullOrWhiteSpace(newUserFirstName))
+        {
+            NotificationService.ShowError("Vorname darf nicht leer sein.");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(newUserLastName))
+        {
+            NotificationService.ShowError("Nachname darf nicht leer sein.");
+            return;
+        }
+
+        var constructedMail = !string.IsNullOrWhiteSpace(newUserMail) ? newUserMail : $"{newUserFirstName}.{newUserLastName}@{appOptions.Value.LocalDomain}".ToLower();
+        if (!IsValidEmailAddress(constructedMail))
+        {
+            NotificationService.ShowError($"E-Mail-Adresse '{constructedMail}' ist ungültig.");
+            return;
+        }
+        
+        var u = new User { FirstName = newUserFirstName, LastName = newUserLastName, Email = constructedMail, UserName = constructedMail};
+        var res = await UserManager.CreateAsync(u);
+        if (res.Succeeded)
+        {
+            NotificationService.ShowSuccess($"Benutzer '{u.UserName}' wurde erstellt.");
+            newUserFirstName = string.Empty;
+            newUserLastName = string.Empty;
+            newUserMail = string.Empty;
+            await LoadAsync();
+        }
+        else
+        {
+            NotificationService.ShowError(string.Join("; ", res.Errors.Select(e => e.Description)));
+        }
+    }
+
+    private User? pendingDeleteUser;
+    private bool showDeleteConfirm;
+
+    // Edit dialog state
+    private User? editUser;
+    private EditUserModel editModel = new();
+    private Dictionary<string, bool> editRoleSelections = new();
+    private bool showEditDialog;
+    private bool savingEdit;
+
+    private Task ConfirmDeleteUser(User user)
+    {
+        if (user.Id == Guid.Empty) return Task.CompletedTask;
+        pendingDeleteUser = user;
+        showDeleteConfirm = true;
+        return Task.CompletedTask;
+    }
+
+    private async Task OpenEditUser(User? user)
+    {
+        if (user == null) return;
+        
+        // load fresh copy via UserManager to ensure compatibility
+        var u = await UserManager.FindByIdAsync(user.Id.ToString());
+        if (u == null) return;
+
+        editUser = u;
+        var hasPassword = await UserManager.HasPasswordAsync(u);
+        editModel = new EditUserModel
+        {
+            Email = u.Email ?? string.Empty,
+            UserName = u.UserName,
+            FirstName = u.FirstName,
+            LastName = u.LastName,
+            EmailConfirmed = await UserManager.IsEmailConfirmedAsync(u),
+            LockoutEnabled = u.LockoutEnabled,
+            PasswordEnabled = !hasPassword
+        };
+
+        // prepare role selections
+        editRoleSelections = new Dictionary<string, bool>();
+        var assigned = new HashSet<string>(await UserManager.GetRolesAsync(u));
+        if (roles != null)
+        {
+            foreach (var name in roles.Select(r => r.Name ?? string.Empty))
+            {
+                editRoleSelections[name] = assigned.Contains(name);
+            }
+        }
+        
+        showEditDialog = true;
+    }
+
+    private void CloseEditDialog()
+    {
+        editUser = null;
+        showEditDialog = false;
+    }
+
+    private async Task SaveEdit()
+    {
+        if (editUser == null) return;
+        savingEdit = true;
+        try
+        {
+            var user = await UserManager.FindByIdAsync(editUser.Id.ToString());
+            if (user == null)
+            {
+                NotificationService.ShowError("Benutzer nicht gefunden.");
+                return;
+            }
+
+            // If email changed, use UserManager to set it (handles normalization)
+            if (!string.Equals(user.Email, editModel.Email, StringComparison.OrdinalIgnoreCase))
+            {
+                var emailRes = await UserManager.SetEmailAsync(user, editModel.Email);
+                if (!emailRes.Succeeded)
+                {
+                    NotificationService.ShowError($"Fehler beim Aktualisieren der E-Mail-Adresse: {string.Join(';', emailRes.Errors.Select(e => e.Description))}");
+                    return;
+                }
+                var unRes = await UserManager.SetUserNameAsync(user, editModel.UserName);
+                if (!unRes.Succeeded)
+                {
+                    NotificationService.ShowError($"Fehler beim Aktualisieren des Benutzernamens: {string.Join(';', unRes.Errors.Select(e => e.Description))}");
+                    return;
+                }
+            }
+            
+            user.FirstName = editModel.FirstName;
+            user.LastName = editModel.LastName;
+            user.LockoutEnabled = editModel.LockoutEnabled;
+            user.EmailConfirmed = editModel.EmailConfirmed;
+
+            var upd = await UserManager.UpdateAsync(user);
+            if (!upd.Succeeded)
+            {
+                NotificationService.ShowError($"Fehler beim Aktualisieren des Benutzers: {string.Join(';', upd.Errors.Select(e => e.Description))}");
+                return;
+            }
+
+            // Roles: compute desired selections
+            var desired = editRoleSelections.Where(kv => kv.Value).Select(kv => kv.Key).ToList();
+            var current = new HashSet<string>(await UserManager.GetRolesAsync(user));
+            var toAdd = desired.Except(current).ToList();
+            var toRemove = current.Except(desired).ToList();
+
+            if (toAdd.Any())
+            {
+                var ar = await UserManager.AddToRolesAsync(user, toAdd);
+                if (!ar.Succeeded)
+                {
+                    NotificationService.ShowError($"Fehler beim Hinzufügen zur Rolle '{toAdd}': {string.Join(';', ar.Errors.Select(e => e.Description))}");
+                    return;
+                }
+            }
+            // For any newly added role, ensure planned membership payments exist for this user
+            if (toAdd.Any())
+            {
+                try
+                {
+                    foreach (var roleName in toAdd)
+                    {
+                        if (string.IsNullOrWhiteSpace(roleName)) continue;
+                        var role = await RoleManager.FindByNameAsync(roleName);
+                        if (role == null) continue;
+
+                        var activeMemberships = await membershipService.GetActiveMemberships(role.Id);
+                        foreach (var ms in activeMemberships)
+                        {
+                            var affected = await membershipService.EnsurePaymentsForUser(ms, user);
+                            if (affected.Added.Count <= 0) continue;
+                            
+                            var roleLabel = role.Name ?? roleName;
+                            var membershipLabel = ms.Role.Name ?? roleLabel;
+                            NotificationService.ShowInfo($"{affected.Added.Count} geplante Zahlungen für Mitgliedschaft '{membershipLabel}' wurden für '{user.UserName}' hinzugefügt.");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    NotificationService.ShowError($"Fehler beim Erzeugen geplanter Zahlungen: {ex.Message}");
+                }
+            }
+            if (toRemove.Any())
+            {
+                var rr = await UserManager.RemoveFromRolesAsync(user, toRemove);
+                if (!rr.Succeeded)
+                {
+                    NotificationService.ShowError($"Fehler beim Entfernen von der Rolle '{toRemove}': {string.Join(';', rr.Errors.Select(e => e.Description))}");
+                    return;
+                }
+            }
+
+            IdentityResult? passwordSet = null;
+            if (editModel.PasswordEnabled && !string.IsNullOrWhiteSpace(editModel.Password))
+            {
+                passwordSet = await UserManager.AddPasswordAsync(user, editModel.Password);
+            }
+
+            var successMessage = !string.IsNullOrWhiteSpace(editModel.Password) && passwordSet is { Succeeded: true } ? $"Benutzer '{user.UserName}' wurde aktualisiert, das neue Passwort wurde gesetzt." : $"Benutzer '{user.UserName}' wurde aktualisiert.";
+            NotificationService.ShowSuccess(successMessage);
+            CloseEditDialog();
+            await LoadAsync();
+        }
+        finally
+        {
+            savingEdit = false;
+        }
+    }
+
+    private void CloseDeleteConfirm()
+    {
+        pendingDeleteUser = null;
+        showDeleteConfirm = false;
+    }
+
+    private async Task DeleteRoleConfirmed()
+    {
+        if (pendingDeleteUser == null) return;
+        var user = await UserManager.FindByIdAsync(pendingDeleteUser.Id.ToString());
+        if (user == null) { CloseDeleteConfirm(); return; }
+       
+        var delRes = await UserManager.DeleteAsync(user);
+        if (delRes.Succeeded)
+        {
+            NotificationService.ShowSuccess($"Benutzer '{pendingDeleteUser.FirstName} {pendingDeleteUser.LastName}' wurde gelöscht.");
+        }
+        else
+        {
+            NotificationService.ShowError($"Fehler beim Löschen des Benutzers '{pendingDeleteUser.FirstName} {pendingDeleteUser.LastName}': {string.Join(';', delRes.Errors.Select(e => e.Description))}");
+        }
+    
+        CloseDeleteConfirm();
+        await LoadAsync();
+    }
+
+    private static bool IsValidEmailAddress(string input)
+    {
+        return Regex.IsMatch(input, @"^((?!\.)[\w\-_.]*[^.])(@\w+)(\.\w+(\.\w+)?[^.\W])$", RegexOptions.Singleline);
+    }
+
+    private string UserCssClassForRow(User? user)
+    {
+        if (user is { EmailConfirmed: true })
+        {
+            return "table-success";
+        }
+        if (user != null && !string.IsNullOrEmpty(user.Email) && user.Email.EndsWith($"@{appOptions.Value.LocalDomain}", StringComparison.OrdinalIgnoreCase))
+        {
+            return "table-warning";
+        }
+
+        return string.Empty;
+    }
+
+    public class EditUserModel
+    {
+        [Required]
+        [EmailAddress]
+        public string Email { get; set; } = string.Empty;
+
+        [Required]
+        public string? UserName { get; set; } = string.Empty;
+        
+        [Required]
+        public string FirstName { get; set; } = string.Empty;
+
+        [Required]
+        public string LastName { get; set; } = string.Empty;
+
+        public string Password { get; set; } = string.Empty;
+        
+        public bool EmailConfirmed { get; set; }
+        public bool LockoutEnabled { get; set; }
+        public bool PasswordEnabled { get; init; }
+    }
+}

@@ -1,0 +1,114 @@
+@page "/transfers/edit/{Id:guid?}"
+@using TeamCashCenter.Data
+@using TeamCashCenter.Services.Contracts
+@attribute [Authorize(Policy = "CanViewTransactions")]
+@inject NavigationManager Nav
+@inject CashCenterContext Db
+@inject ITransferService transferService;
+
+<div class="card">
+    <div class="card-body">
+        <h2 class="card-title">@(actualTransfer.Id == Guid.Empty ? "Neuer Transfer" : "Transfer bearbeiten")</h2>
+
+        <EditForm Model="actualTransfer" OnValidSubmit="Save">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Datum</label>
+                    <InputDate class="form-control" @bind-Value="actualTransfer.BookingDate" />
+                    <ValidationMessage For="() => actualTransfer.BookingDate" />
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Ursprungskonto</label>
+                    <InputSelect class="form-select" @bind-Value="actualTransfer.SourceAccountId">
+                        <option value="">-- auswählen --</option>
+                        @foreach (var a in accounts) { <option value="@a.Id">@a.Name</option> }
+                    </InputSelect>
+                    <ValidationMessage For="() => actualTransfer.SourceAccountId" />
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Zielkonto</label>
+                    <InputSelect class="form-select" @bind-Value="actualTransfer.TargetAccountId">
+                        <option value="">-- auswählen --</option>
+                        @foreach (var a in accounts) { <option value="@a.Id">@a.Name</option> }
+                    </InputSelect>
+                    <ValidationMessage For="() => actualTransfer.TargetAccountId" />
+                </div>
+                @*<div class="col-md-4 mb-3">
+                    <label class="form-label">Typ</label>
+                    <InputSelect class="form-select" @bind-Value="transaction.TransactionTypeId">
+                        <option value="">-- auswählen --</option>
+                        @foreach (var t in types) { <option value="@t.Id">@t.Name</option> }
+                    </InputSelect>
+                    <ValidationMessage For="() => transaction.TransactionTypeId" />
+                </div>*@
+            </div>
+
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Betrag</label>
+                    <CurrencyInput TValue="decimal" @bind-Value="actualTransfer.Amount" Locale="de-DE" ShowCurrencySymbol="true" />
+                    <ValidationMessage For="() => actualTransfer.Amount" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Beschreibung</label>
+                    <InputText class="form-control" @bind-Value="actualTransfer.Description" />
+                    <ValidationMessage For="() => actualTransfer.Description" />
+                </div>
+                @*<div class="col-md-4 mb-3">
+                    <label class="form-label">Spieler (optional)</label>
+                    <InputSelect class="form-select" @bind-Value="transaction.UserId">
+                        <option value="">-- auswählen --</option>
+                        @foreach (var p in users) { <option value="@p.Id">@p.FirstName @p.LastName</option> }
+                    </InputSelect>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Geplante Zahlung (optional)</label>
+                    <InputSelect class="form-select" @bind-Value="transaction.PaymentId">
+                        <option value="">-- auswählen --</option>
+                        @foreach (var pp in planned) { <option value="@pp.Id">@pp.Description - @pp.Amount.ToString("C")</option> }
+                    </InputSelect>
+                </div>*@
+            </div>
+
+            <button class="btn btn-primary" type="submit">Speichern</button>
+            <a class="btn btn-secondary ms-2" href="/transactions">Abbrechen</a>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    private Transfer actualTransfer = new() { BookingDate = DateTime.Today };
+    private List<Account> accounts = new();
+    private Transfer? formerTransfer;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        accounts = await Db.Accounts.ToListAsync();
+
+        if (Id.HasValue)
+        {
+            var existing = await Db.Transfers.Include(t => t.SourceAccount).Include(t => t.TargetAccount).FirstOrDefaultAsync(t => t.Id == Id.Value);
+            if (existing != null)
+            {
+                formerTransfer = existing.GetCopy();
+                actualTransfer = existing;
+            }
+        }
+    }
+
+    private async Task Save()
+    {
+        if (actualTransfer.Id == Guid.Empty) Db.Transfers.Add(actualTransfer);
+        else Db.Transfers.Update(actualTransfer);
+        await Db.SaveChangesAsync();
+        await transferService.Upsert(actualTransfer, formerTransfer);
+
+        Nav.NavigateTo("/transfers");
+    }
+}

@@ -1,0 +1,123 @@
+@page "/account/password/forgot"
+@using TeamCashCenter.Services
+@using TeamCashCenter.Services.Contracts
+@using Notification = TeamCashCenter.Services.Notification
+
+@inject Microsoft.AspNetCore.Identity.UserManager<User> UserManager
+@inject NotificationService NotificationService
+@inject IEmailSender EmailSender
+@inject Microsoft.Extensions.Options.IOptions<EmailOptions> EmailOptions
+@inject Microsoft.Extensions.Options.IOptions<AppOptions> AppOptions
+@inject NavigationManager Navigation
+@inject ILogger<Forgot>? Logger
+
+<div class="d-flex justify-content-center">
+    <div class="card col-12 col-md-6">
+        <div class="card-body">
+            <h3 class="card-title">Forgot Password</h3>
+
+            <EditForm Model="model" OnValidSubmit="HandleForgot">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="mb-3">
+            <label class="form-label">Email</label>
+            <InputText class="form-control" @bind-Value="model.Email" />
+            <ValidationMessage For="() => model.Email" />
+        </div>
+
+                <button class="btn btn-primary" type="submit" disabled="@isSubmitting">
+                    @if (isSubmitting)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    }
+                    Send reset link
+                </button>
+            </EditForm>
+
+            @if (!string.IsNullOrEmpty(sentTo))
+            {
+                <div class="mt-3 alert alert-success">
+                    A password reset link was sent to <strong>@sentTo</strong>. Please check your email.
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private ForgotModel model = new();
+    private string? sentTo;
+
+    private bool isSubmitting = false;
+
+    private async Task HandleForgot()
+    {
+        try
+        {
+            isSubmitting = true;
+            StateHasChanged();
+
+            var user = await UserManager.FindByEmailAsync(model.Email ?? string.Empty);
+            if (user == null)
+            {
+                NotificationService.Set(new Notification { Message = "If that email exists, a reset link will be sent.", Type = "info" });
+                return;
+            }
+
+            var token = await UserManager.GeneratePasswordResetTokenAsync(user);
+            var encoded = System.Net.WebUtility.UrlEncode(token);
+            var resetUrl = new Uri(new Uri(Navigation.BaseUri), $"resetpassword?email={System.Net.WebUtility.UrlEncode(user.Email)}&token={encoded}").ToString();
+
+                            var opts = EmailOptions.Value;
+                            var appOpts = AppOptions.Value;
+                            var appName = string.IsNullOrEmpty(appOpts.DisplayName) ? (string.IsNullOrEmpty(opts.DisplayName) ? "Mannschaftskasse" : opts.DisplayName) : appOpts.DisplayName;
+                            var expiryHours = opts.ResetTokenExpiryHours;
+                            var adminContact = opts.AdminContact ?? "your administrator";
+
+                                var html = $@"<div style='font-family:Segoe UI, Roboto, Helvetica, Arial, sans-serif; color:#333;'>
+                        <h2 style='color:#0d6efd'>{appName} — Password Reset</h2>
+    <p>Hello,</p>
+    <p>We received a request to reset the password for the account associated with <strong>{System.Net.WebUtility.HtmlEncode(user.Email)}</strong>.</p>
+    <p style='text-align:center; margin:24px 0;'>
+        <a href=""{resetUrl}"" style='display:inline-block; padding:12px 20px; background-color:#0d6efd; color:#fff; text-decoration:none; border-radius:6px;'>Reset your password</a>
+    </p>
+    <p>If the button above does not work, copy and paste the following link into your browser:</p>
+    <p><a href=""{resetUrl}"">{resetUrl}</a></p>
+    <hr />
+    <p style='font-size:0.9rem; color:#666;'>This link will expire in {expiryHours} hours. If you did not request a password reset, you can safely ignore this email or contact {System.Net.WebUtility.HtmlEncode(adminContact)}.</p>
+    <p style='font-size:0.9rem; color:#666;'>Thanks — the {appName} team</p>
+</div>";
+
+                        var plain = $"{appName} - Password Reset\n\n" +
+                                                $"A request to reset the password for the account {user.Email} was received.\n\n" +
+                                                $"Open the link below to reset your password:\n{resetUrl}\n\n" +
+                                                $"If you did not request this, ignore this message or contact {adminContact}.\n\n" +
+                                                $"This link will expire in {expiryHours} hours.";
+
+                        try
+                        {
+                                await EmailSender.SendEmailAsync(user.Email!, "Reset your password", html, plain);
+                                NotificationService.Set(new Notification { Message = "Password reset link sent (if the email exists).", Type = "success" });
+                                sentTo = user.Email;
+                        }
+            catch (Exception ex)
+            {
+                NotificationService.Set(new Notification { Message = "Failed to send reset email. Please contact an administrator.", Type = "error" });
+                Logger?.LogError(ex, "Failed to send reset email");
+            }
+        }
+        finally
+        {
+            isSubmitting = false;
+            StateHasChanged();
+        }
+    }
+
+    private class ForgotModel
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.EmailAddress]
+        public string? Email { get; set; }
+    }
+}

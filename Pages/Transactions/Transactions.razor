@@ -1,0 +1,278 @@
+@page "/transactions"
+@attribute [Authorize(Policy = "CanViewTransactions")]
+@using System.Net.Http.Json
+@using TeamCashCenter.Data
+@using TeamCashCenter.Models
+@inject HttpClient Http
+@inject CashCenterContext Db
+
+<h2>Buchungen</h2>
+
+@if (transactions == null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    @* Filters *@
+    <div class="mb-3">
+        <div class="row g-2">
+            <div class="col-auto">
+                <label class="form-label">Von</label>
+                <input class="form-control" type="date" @bind="fromDate" />
+            </div>
+            <div class="col-auto">
+                <label class="form-label">Bis</label>
+                <input class="form-control" type="date" @bind="toDate" />
+            </div>
+            <div class="col-auto">
+                <label class="form-label">Zielkonto</label>
+                <select class="form-select" @bind="selectedAccountId">
+                    <option value="">All</option>
+                    @foreach (var a in accounts)
+                    {
+                        <option value="@a.Id">@a.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-auto">
+                <label class="form-label">Benutzer</label>
+                <select class="form-select" @bind="selectedPlayerId">
+                    <option value="">All</option>
+                    @foreach (var p in players)
+                    {
+                        <option value="@p.Id">@p.DisplayName</option>
+                    }
+                </select>
+            </div>
+            <div class="col-auto">
+                <label class="form-label">Sortierung</label>
+                <select class="form-select" @bind="sortBy">
+                    <option value="bookingDate">Datum</option>
+                    <option value="amount">Betrag</option>
+                </select>
+            </div>
+            <div class="col-auto">
+                <label class="form-label">Sortierrichtung</label>
+                <select class="form-select" @bind="sortDir">
+                    <option value="desc">Neueste zuerst</option>
+                    <option value="asc">Älteste zuerst</option>
+                </select>
+            </div>
+            <div class="col-auto align-self-end">
+                <div class="btn-group">
+                    <button class="btn btn-primary" @onclick="() => LoadPage(1)">Anwenden</button>
+                    <button class="btn btn-secondary" @onclick="ClearFilters">Leeren</button>
+                        <button class="btn btn-success" @onclick="ExportExcel">
+                            <i class="bi bi-file-earmark-excel"></i> Export als Excel
+                        </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <table class="table table-bordered">
+        <thead><tr><th>Erfassungsdatum</th><th>Id</th><th>Übergeordnet</th><th>Buchungdatum</th><th>Konto</th><th>Spieler</th><th>Betrag</th><th>Beschreibung</th></tr></thead>
+        <tbody>
+            @foreach (var t in transactions)
+            {
+                <tr>
+                    <td>@t.Date.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                    <td>@t.Id.ToString("N")</td>
+                    <td>@(t.ParentId.HasValue ? t.ParentId.Value.ToString("N") : "-")</td>
+                    <td>@t.BookingDate.ToString("yyyy-MM-dd")</td>
+                    <td>@t.AccountName</td>
+                    <td>@(string.IsNullOrEmpty(t.UserName) ? "-" : t.UserName)</td>
+                    <td>@t.Amount.ToString("C")</td>
+                    <td>@t.Description</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <nav>
+        <ul class="pagination">
+            <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                <button class="page-link" @onclick="() => LoadPage(currentPage - 1)" disabled="@(currentPage == 1)">Vorherige</button>
+            </li>
+            @foreach (var p in GetPageList())
+            {
+                if (p == -1)
+                {
+                    <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+                }
+                else
+                {
+                    <li class="page-item @(p == currentPage ? "active" : "")">
+                        <button class="page-link" @onclick="() => LoadPage(p)">@p</button>
+                    </li>
+                }
+            }
+            <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                <button class="page-link" @onclick="() => LoadPage(currentPage + 1)" disabled="@(currentPage == totalPages)">Nächste</button>
+            </li>
+        </ul>
+    </nav>
+}
+
+@code {
+    private List<TransactionDto>? transactions;
+    private int currentPage = 1;
+    private readonly int pageSize = 20;
+    private int totalCount;
+    private int totalPages => Math.Max(1, (int)Math.Ceiling((double)totalCount / pageSize));
+
+    // filter/sort state
+    private DateTime? fromDate;
+    private DateTime? toDate;
+    private int? selectedAccountId;
+    private int? selectedPlayerId;
+    private string sortBy = "bookingDate";
+    private string sortDir = "desc";
+
+    private List<(Guid Id, string Name)> accounts = [];
+    private List<(Guid Id, string DisplayName)> players = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        // load accounts and players for filters (materialize then map to tuples)
+        var accAnon = await Db.Accounts.OrderBy(a => a.Name).Select(a => new { a.Id, a.Name }).ToListAsync();
+        accounts = accAnon.Select(a => (a.Id, a.Name)).ToList();
+
+        var playerAnon = await Db.Users.OrderBy(p => p.LastName).Select(p => new { p.Id, DisplayName = p.FirstName + " " + p.LastName }).ToListAsync();
+        players = playerAnon.Select(p => (p.Id, p.DisplayName)).ToList();
+
+        await LoadPage(1);
+    }
+
+    private async Task LoadPage(int page)
+    {
+        if (page < 1) page = 1;
+        currentPage = page;
+
+        try
+        {
+            var query = new List<string>
+            {
+                $"page={currentPage}",
+                $"pageSize={pageSize}"
+            };
+            if (fromDate.HasValue) query.Add($"from={fromDate.Value:yyyy-MM-dd}");
+            if (toDate.HasValue) query.Add($"to={toDate.Value:yyyy-MM-dd}");
+            if (selectedAccountId.HasValue) query.Add($"accountId={selectedAccountId.Value}");
+            if (selectedPlayerId.HasValue) query.Add($"playerId={selectedPlayerId.Value}");
+            if (!string.IsNullOrEmpty(sortBy)) query.Add($"sortBy={sortBy}");
+            if (!string.IsNullOrEmpty(sortDir)) query.Add($"sortDir={sortDir}");
+
+            var url = $"api/transactions?{string.Join('&', query)}";
+            
+            var resp = await Http.GetFromJsonAsync<PagedResponse<TransactionDto>>(url);
+            if (resp != null)
+            {
+                transactions = resp.Items ?? [];
+                totalCount = resp.TotalCount;
+            }
+            else
+            {
+                transactions = [];
+                totalCount = 0;
+            }
+        }
+        catch (Exception)
+        {
+            // Fallback: load recent items directly from Db (graceful degradation)
+                var raw = Db.Transactions
+                    .AsNoTracking()
+                    .Include(t => t.Account)
+                    .Include(t => t.User)
+                    .OrderByDescending(t => t.BookingDate)
+                    .ThenByDescending(t => t.Id)
+                    .Take(200)
+                    .Select(t => new
+                    {
+                        t.Id,
+                        t.Date,
+                        t.BookingDate,
+                        t.Amount,
+                        AccountId = t.AccountId,
+                        AccountName = t.Account != null ? t.Account.Name : null,
+                        t.UserId,
+                        PlayerName = t.User != null ? (t.User.FirstName + " " + t.User.LastName) : null,
+                        t.Description
+                    })
+                    .ToList()
+                    .Select(t => new TransactionDto
+                    {
+                        Id = t.Id,
+                        Date = t.Date,
+                        BookingDate = t.BookingDate,
+                        Amount = t.Amount,
+                        AccountId = t.AccountId,
+                        AccountName = t.AccountName,
+                        UserId = t.UserId,
+                        UserName = t.PlayerName,
+                        Description = t.Description
+                    })
+                    .ToList();
+                    transactions = raw;
+                    totalCount = transactions.Count;
+        }
+    }
+
+    private void ClearFilters()
+    {
+        fromDate = null;
+        toDate = null;
+        selectedAccountId = null;
+        selectedPlayerId = null;
+        sortBy = "bookingDate";
+        sortDir = "desc";
+        _ = LoadPage(1);
+    }
+
+    private IEnumerable<int> GetPageList()
+    {
+        var pages = new List<int>();
+        if (totalPages <= 9)
+        {
+            for (var i = 1; i <= totalPages; i++) pages.Add(i);
+            return pages;
+        }
+
+        pages.Add(1);
+
+        var left = Math.Max(2, currentPage - 2);
+        var right = Math.Min(totalPages - 1, currentPage + 2);
+
+        if (left > 2) pages.Add(-1); // ellipsis
+
+        for (var i = left; i <= right; i++) pages.Add(i);
+
+        if (right < totalPages - 1) pages.Add(-1);
+
+        pages.Add(totalPages);
+        return pages;
+    }
+
+    // Using shared DTOs from Models/TransactionDto.cs and Models/PagedResponse.cs
+
+        private async Task ExportExcel()
+        {
+            var query = new List<string>();
+            if (fromDate.HasValue) query.Add($"from={fromDate.Value:yyyy-MM-dd}");
+            if (toDate.HasValue) query.Add($"to={toDate.Value:yyyy-MM-dd}");
+            if (selectedAccountId.HasValue) query.Add($"accountId={selectedAccountId.Value}");
+            if (selectedPlayerId.HasValue) query.Add($"userId={selectedPlayerId.Value}");
+            var url = $"api/transactions/export/excel{(query.Count > 0 ? "?" + string.Join("&", query) : "")}";
+
+            // JS Interop für File-Download
+            await DownloadFile(url);
+        }
+
+        [Inject] private IJSRuntime JS { get; set; } = default!;
+
+        private async Task DownloadFile(string url)
+        {
+            await JS.InvokeVoidAsync("downloadFile", url);
+        }
+}

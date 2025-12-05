@@ -1,0 +1,53 @@
+@page "/memberships"
+@attribute [Authorize(Policy = "CanViewTransactions")]
+@using TeamCashCenter.Data
+@inject CashCenterContext Db
+
+<h2>Mitgliedschaften</h2>
+
+<a class="btn btn-primary mb-3" href="/memberships/edit">Neue Mitgliedschaft</a>
+
+@if (memberships is null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <table class="table table-bordered">
+        <thead><tr><th>Rolle</th><th>Monatsbeitrag</th><th>Start</th><th>Ende</th><th>Aktiv</th><th></th></tr></thead>
+        <tbody>
+            @foreach (var m in memberships)
+            {
+                <tr>
+                    <td>@m.Role.Name</td>
+                    <td>@m.MonthlyFee.ToString("C")</td>
+                    <td>@m.StartDate.ToString("yyyy-MM-dd")</td>
+                    <td>@(m.EndDate.ToString("yyyy-MM-dd") ?? "-")</td>
+                    <td>
+                        @if (m.IsActive)
+                        {
+                            <span class="badge bg-success">Aktiv</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">Inaktiv</span>
+                        }
+                    </td>
+                    <td>
+                        <a class="btn btn-sm btn-secondary me-2" href="/memberships/edit/@m.Id">Bearbeiten</a>
+                        <a class="btn btn-sm btn-danger" href="/memberships/delete/@m.Id">Löschen</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<Membership>? memberships;
+
+    protected override async Task OnInitializedAsync()
+    {
+        memberships = await Db.Memberships.Include(m => m.Role).ToListAsync();
+    }
+}

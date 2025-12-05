@@ -1,0 +1,41 @@
+@page "/transactiontypes"
+@using TeamCashCenter.Data
+@attribute [Authorize(Roles = "Admin,Treasurer")]
+@inject CashCenterContext Db
+
+<h2>Buchungsarten</h2>
+
+<a class="btn btn-primary mb-3" href="/transactiontypes/edit">Neue Art</a>
+
+@if (types is null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <table class="table table-bordered">
+        <thead><tr><th>Name</th><th>Einnahme?</th><th></th></tr></thead>
+        <tbody>
+            @foreach (var t in types)
+            {
+                <tr>
+                    <td>@t.Name</td>
+                    <td>@(t.IsIncome ? "Ja" : "Nein")</td>
+                    <td>
+                        <a class="btn btn-sm btn-secondary me-2" href="/transactiontypes/edit/@t.Id">Bearbeiten</a>
+                        <a class="btn btn-sm btn-danger" href="/transactiontypes/delete/@t.Id">Löschen</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<TransactionType>? types;
+
+    protected override async Task OnInitializedAsync()
+    {
+        types = await Db.TransactionTypes.ToListAsync();
+    }
+}

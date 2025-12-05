@@ -1,0 +1,86 @@
+@page "/admin/create"
+@using Microsoft.AspNetCore.Identity
+@inject UserManager<User> UserManager
+@inject RoleManager<Role> RoleManager
+@inject NavigationManager Navigation
+
+<h3>Admin erstellen</h3>
+
+@if (resultMessage != null)
+{
+    <div class="alert alert-info">@resultMessage</div>
+}
+
+<EditForm Model="adminModel" OnValidSubmit="CreateAdmin">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="mb-3">
+        <label class="form-label">Email</label>
+        <InputText class="form-control" @bind-Value="adminModel.Email" />
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Password</label>
+        <InputText class="form-control" type="password" @bind-Value="adminModel.Password" />
+    </div>
+
+    <button class="btn btn-primary" type="submit">Erstellen</button>
+    <button class="btn btn-secondary ms-2" type="button" @onclick="GoHome">Abbrechen</button>
+</EditForm>
+
+@code {
+    private string? resultMessage;
+
+    private AdminModel adminModel = new AdminModel { Email = "admin@verein.local", Password = "Admin123!" };
+
+    public class AdminModel
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+    }
+
+    private async Task CreateAdmin()
+    {
+        resultMessage = null;
+
+        var roleName = "Admin";
+        if (!await RoleManager.RoleExistsAsync(roleName))
+        {
+            var roleResult = await RoleManager.CreateAsync(new Role(roleName, roleName));
+            if (!roleResult.Succeeded)
+            {
+                resultMessage = "Fehler beim Erstellen der Rolle: " + string.Join(", ", roleResult.Errors.Select(e => e.Description).ToArray());
+                return;
+            }
+        }
+
+        var user = await UserManager.FindByEmailAsync(adminModel.Email);
+        if (user != null)
+        {
+            resultMessage = "Benutzer existiert bereits.";
+            return;
+        }
+
+        user = new User { UserName = adminModel.Email, Email = adminModel.Email, EmailConfirmed = true };
+        var createResult = await UserManager.CreateAsync(user, adminModel.Password);
+        if (!createResult.Succeeded)
+        {
+            resultMessage = "Fehler beim Erstellen des Benutzers: " + string.Join(", ", createResult.Errors.Select(e => e.Description).ToArray());
+            return;
+        }
+
+        var addToRole = await UserManager.AddToRoleAsync(user, roleName);
+        if (!addToRole.Succeeded)
+        {
+            resultMessage = "Fehler beim Zuweisen der Rolle: " + string.Join(", ", addToRole.Errors.Select(e => e.Description).ToArray());
+            return;
+        }
+
+        resultMessage = "Admin-Benutzer erfolgreich erstellt.";
+    }
+
+    private void GoHome()
+    {
+        Navigation.NavigateTo("/");
+    }
+}

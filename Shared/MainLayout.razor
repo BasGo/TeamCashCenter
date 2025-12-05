@@ -1,0 +1,128 @@
+@inherits LayoutComponentBase
+@inject Microsoft.Extensions.Options.IOptions<Services.AppOptions> AppOptions
+@using System.Security.Claims
+
+@* Styles moved to wwwroot/css/app.css; use initials avatar next to label *@
+
+<div class="d-flex flex-column min-vh-100">
+    <header class="bg-gradient p-3 shadow-sm">
+        <div class="container d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center">
+                <img src="/favicon.svg" alt="logo" style="width:60px;height:60px;" class="me-2" />
+                <div>
+                    <h1 class="h4 m-0 text-primary">@((string.IsNullOrEmpty(AppOptions.Value.DisplayName) ? "Mannschaftskasse" : AppOptions.Value.DisplayName))</h1>
+                    <small class="text-muted">@((string.IsNullOrEmpty(AppOptions.Value.DisplayName) ? "Vereinsverwaltung & Buchungen" : AppOptions.Value.Claim))</small>
+
+                @code {
+                    private static string GetUserLabel(ClaimsPrincipal? user, out string? email)
+                    {
+                        email = null;
+                        if (user?.Identity?.IsAuthenticated != true)
+                            return "Konto";
+
+                        email = user.FindFirst(c => c.Type == ClaimTypes.Email)?.Value
+                                ?? user.FindFirst(c => c.Type == "email")?.Value;
+
+                        var fullName = user.FindFirst(c => c.Type == ClaimTypes.Name)?.Value
+                                       ?? user.FindFirst(c => c.Type == ClaimTypes.GivenName)?.Value
+                                       ?? user.Identity?.Name;
+
+                        var label = string.IsNullOrWhiteSpace(fullName) ? (email ?? "Konto") : fullName!;
+                        return label;
+                    }
+                }
+                </div>
+            </div>
+
+            <nav class="navbar navbar-expand-md p-0">
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu" aria-controls="navMenu" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navMenu">
+                    <ul class="navbar-nav ms-auto">
+                        <AuthorizeView Policy="CanViewTransactions">
+                            <Authorized>
+                                <li class="nav-item"><a class="nav-link text-dark" href="/players">Spieler</a></li>
+                                <AuthorizeView Roles="Admin,Treasurer">
+                                    <Authorized Context="adminAuth">
+                                        <li class="nav-item dropdown">
+                                            <a class="nav-link dropdown-toggle text-dark d-flex align-items-center" href="#" id="transactionMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="Einstellungen">
+                                                <span class="user-label-truncate">Einstellungen</span>
+                                                <span class="visually-hidden">Einstellungen</span>
+                                            </a>
+                                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenu">
+                                                <li><a class="dropdown-item" href="/accounts/overview">Übersicht</a></li>
+                                                <li><hr class="dropdown-divider"/></li>
+                                                <li><a class="dropdown-item" href="/accounts">Konten</a></li>
+                                                <li><hr class="dropdown-divider"/></li>
+                                                <li><a class="dropdown-item" href="/transfers">Übertrag</a></li>
+                                                <li><hr class="dropdown-divider"/></li>
+                                                <li><a class="dropdown-item" href="/transactions">Buchungen</a></li>
+                                                <li><a class="dropdown-item" href="/transactiontypes">Buchungsarten</a></li>
+                                                <li><a class="dropdown-item" href="/memberships">Mitgliedschaften</a></li>
+                                                <li><a class="dropdown-item" href="/payments">Geplante Zahlungen</a></li>
+                                            </ul>
+                                        </li>
+                                    </Authorized>
+                                </AuthorizeView>
+                            </Authorized>
+                            <NotAuthorized>
+                                @* hide links when not authorized *@
+                            </NotAuthorized>
+                        </AuthorizeView>
+
+                        <AuthorizeView>
+                            <Authorized Context="auth">
+                                <li class="nav-item dropdown">
+                                    @{
+                                        var label = GetUserLabel(auth.User, out var email);
+                                        var display = label.Length > 20 ? label.Substring(0, 17) + "..." : label;
+                                    }
+                                    <a class="nav-link dropdown-toggle text-dark d-flex align-items-center" href="#" id="userMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="@email">
+                                        <span class="user-label-truncate">@display</span>
+                                        <span class="visually-hidden">@label</span>
+                                    </a>
+                                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenu">
+                                        <li><a class="dropdown-item" href="/account/manage">Benutzerkonto</a></li>
+                                        <li><hr class="dropdown-divider" /></li>
+                                        <AuthorizeView Roles="Admin">
+                                            <Authorized Context="adminAuth">
+                                                <li><a class="dropdown-item" href="/admin/users">Benutzerverwaltung</a></li>
+                                                <li><a class="dropdown-item" href="/admin/roles">Rollenverwaltung</a></li>
+                                                <li><a class="dropdown-item" href="/admin/assignments">Rollenzuweisungen</a></li>
+                                                <li><hr class="dropdown-divider"/></li>
+                                            </Authorized>
+                                        </AuthorizeView>
+                                        <li>
+                                            <form method="post" action="/account/logout" class="m-0">
+                                                <input type="hidden" name="ReturnUrl" value="/account/login?loggedout=1" />
+                                                <button type="submit" class="dropdown-item">Logout</button>
+                                            </form>
+                                        </li>
+                                    </ul>
+                                </li>
+                            </Authorized>
+                            <NotAuthorized>
+                                <li class="nav-item"><a class="nav-link text-dark" href="/account/login">Login</a></li>
+                            </NotAuthorized>
+                        </AuthorizeView>
+                    </ul>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <Notification />
+
+    <main class="flex-fill container py-4">
+        @Body
+    </main>
+
+    <footer class="bg-light text-center py-3 mt-auto">
+        <div class="container d-flex justify-content-between small">
+            <div>© Verein — @((string.IsNullOrEmpty(AppOptions.Value.DisplayName) ? "Mannschaftskasse" : AppOptions.Value.DisplayName))</div>
+            <div>Version: 0.1</div>
+        </div>
+    </footer>
+    <script src="/js/downloadFile.js"></script>
+</div>

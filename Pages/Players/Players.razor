@@ -1,0 +1,67 @@
+@page "/players"
+@using TeamCashCenter.Data
+@attribute [Authorize(Policy = "CanViewTransactions")]
+@inject CashCenterContext Db
+
+<h2>Spieler</h2>
+
+@if (users is null)
+{
+    <p>Lade ...</p>
+}
+else
+{
+    <table class="table table-bordered">
+        <thead>
+            <tr><th>Nachname</th><th>Vorname</th><th>Nr.</th><th>Geburtsdatum</th><th width="200px">Offene Zahlungen</th><th width="400px">Aktionen</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var p in users)
+            {
+                <tr>
+                    <td>@p.LastName</td>
+                    <td>@p.FirstName</td>
+                    <td>@p.JerseyNumber</td>
+                    <td>@(p.BirthDate?.ToString("yyyy-MM-dd"))</td>
+                    <td>
+                        @if (openSums.ContainsKey(p.Id))
+                        {
+                            @openSums[p.Id].ToString("C")
+                        }
+                        else
+                        {
+                            <span>-</span>
+                        }
+                    </td>
+                    <td>
+                        <a class="btn btn-sm btn-secondary me-2" href="/players/edit/@p.Id">Bearbeiten</a>
+                        <a class="btn btn-sm btn-danger me-2" href="/players/delete/@p.Id">Löschen</a>
+                        @if (openSums.ContainsKey(p.Id))
+                        {
+                            <a class="btn btn-sm btn-info" href="/payments/@p.Id">Offene Zahlungen</a>
+                        }
+                        else
+                        {
+                            <span></span>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<User>? users;
+    private Dictionary<Guid, decimal> openSums = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        users = await Db.Users.OrderBy(p => p.LastName).ToListAsync();
+
+        var planned = await Db.Payments.Where(pp => !pp.IsPaid && pp.UserId.HasValue).ToListAsync();
+        openSums = planned
+            .GroupBy(pp => pp.UserId!.Value)
+            .ToDictionary(g => g.Key, g => g.Sum(p => p.Amount));
+    }
+}

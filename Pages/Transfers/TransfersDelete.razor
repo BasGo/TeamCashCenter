@@ -1,0 +1,46 @@
+@page "/transfers/delete/{Id:int}"
+@using TeamCashCenter.Data
+@attribute [Authorize(Policy = "CanViewTransactions")]
+@inject NavigationManager Nav
+@inject CashCenterContext Db
+
+<h3>Bestätigung</h3>
+
+@if (transfer is null)
+{
+    <p>Nicht gefunden.</p>
+}
+else
+{
+    <div class="card p-3">
+        <p>Willst du die Buchung vom <strong>@transfer.BookingDate.ToString("yyyy-MM-dd")</strong> über <strong>@transfer.Amount.ToString("C")</strong> löschen?</p>
+        <button class="btn btn-danger me-2" @onclick="Delete">Löschen</button>
+        <a class="btn btn-secondary" href="/transactions">Abbrechen</a>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Transfer? transfer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        transfer = await Db.Transfers.FindAsync(Id);
+    }
+
+    private async Task Delete()
+    {
+        if (transfer != null)
+        {
+            // reverse account balance change
+            var acc = await Db.Accounts.FindAsync(transfer.TargetAccountId);
+            if (acc != null) { acc.Balance -= transfer.Amount; Db.Accounts.Update(acc); }
+
+            Db.Transfers.Remove(transfer);
+            await Db.SaveChangesAsync();
+        }
+        Nav.NavigateTo("/transactions");
+    }
+}

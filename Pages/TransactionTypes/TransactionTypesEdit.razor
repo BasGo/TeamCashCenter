@@ -1,0 +1,51 @@
+@page "/transactiontypes/edit/{Id:int?}"
+@using TeamCashCenter.Data
+@attribute [Authorize(Roles = "Admin,Treasurer")]
+@inject NavigationManager Nav
+@inject CashCenterContext Db
+
+<div class="card">
+    <div class="card-body">
+        <h2 class="card-title">@(type.Id == 0 ? "Neue Buchungsart" : "Buchungsart bearbeiten")</h2>
+
+        <EditForm Model="type" OnValidSubmit="Save">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="mb-3">
+                <label class="form-label">Name</label>
+                <InputText class="form-control" @bind-Value="type.Name" />
+                <ValidationMessage For="() => type.Name" />
+            </div>
+            <div class="form-check mb-3">
+                <InputCheckbox class="form-check-input" @bind-Value="type.IsIncome" />
+                <label class="form-check-label">Einnahme</label>
+            </div>
+
+            <button class="btn btn-primary" type="submit">Speichern</button>
+            <a class="btn btn-secondary ms-2" href="/transactiontypes">Abbrechen</a>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public int? Id { get; set; }
+
+    private TransactionType type = new();
+    protected override async Task OnInitializedAsync()
+    {
+        if (Id.HasValue)
+        {
+            var existing = await Db.TransactionTypes.FindAsync(Id.Value);
+            if (existing != null) type = existing;
+        }
+    }
+
+    private async Task Save()
+    {
+        if (type.Id == 0) Db.TransactionTypes.Add(type); else Db.TransactionTypes.Update(type);
+        await Db.SaveChangesAsync();
+        Nav.NavigateTo("/transactiontypes");
+    }
+}

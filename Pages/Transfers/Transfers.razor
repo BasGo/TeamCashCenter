@@ -1,0 +1,51 @@
+@page "/transfers"
+@using TeamCashCenter.Data
+@attribute [Authorize(Policy = "CanViewTransactions")]
+@inject CashCenterContext Db
+
+<h2>Überträge</h2>
+
+<a class="btn btn-primary mb-3" href="/transfers/edit">Neuer Übertrag</a>
+
+@if (transfers == null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <table class="table table-bordered">
+        <thead><tr><th>Datum</th><th>Ursprungskonto</th><th>Konto</th><th>Betrag</th><th>Beschreibung</th><th>Aktionen</th></tr></thead>
+        <tbody>
+            @foreach (var t in transfers)
+            {
+                <tr>
+                    <td>@t.BookingDate.ToString("yyyy-MM-dd")</td>
+                    <td>@t.SourceAccount.Name</td>
+                    <td>@t.TargetAccount.Name</td>
+                    <td>@t.Amount.ToString("C")</td>
+                    <td>@t.Description</td>
+                    <td>
+                        <a class="btn btn-sm btn-secondary me-2" href="/transfers/edit/@t.Id"><i class="bi bi-pencil"></i></a>
+                        <a class="btn btn-sm btn-danger" href="/transfers/delete/@t.Id"><i class="bi bi-trash"></i></a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+
+    private List<Transfer>? transfers;
+
+    protected override async Task OnInitializedAsync()
+    {
+        transfers = await Db.Transfers
+            .AsNoTracking()
+            .Include(t => t.TargetAccount)
+            .Include(t => t.SourceAccount)
+            .OrderByDescending(t => t.BookingDate)
+            .ThenByDescending(t => t.Id)
+            .ToListAsync();
+    }
+}
