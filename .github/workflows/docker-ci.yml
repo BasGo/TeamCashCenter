@@ -71,9 +71,3 @@ jobs:
           push: true
           tags: ghcr.io/${{ github.repository }}:${{ steps.tag.outputs.tag }}
 
-      - name: Push to DockerHub
-        if: secrets.DOCKERHUB_USERNAME && secrets.DOCKERHUB_TOKEN
-        run: |
-          docker tag ${{ github.repository }}:${{ steps.tag.outputs.tag }} ${{ secrets.DOCKERHUB_USERNAME }}/${{ github.repository }}:${{ steps.tag.outputs.tag }}
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ github.repository }}:${{ steps.tag.outputs.tag }}
-
