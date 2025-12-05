@@ -13,6 +13,9 @@
     <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <TrimMode>partial</TrimMode>
+  </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Blazor.Bootstrap" Version="3.5.0" />
     <PackageReference Include="ClosedXML" Version="0.105.0" />
