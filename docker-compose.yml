@@ -5,7 +5,10 @@ services:
     ports:
       - "5005:80"
     volumes:
-      - ./TeamCashCenter.db:/app/TeamCashCenter.db
+      - ./data:/app/data
+      - ./logs:/app/logs
     environment:
+      - DATA_DIR=/app/data
+      - LOG_DIR=/app/logs
       - ASPNETCORE_ENVIRONMENT=Development
     restart: unless-stopped

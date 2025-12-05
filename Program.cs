@@ -1,3 +1,5 @@
+using System;
+using System.IO;
 using Microsoft.EntityFrameworkCore;
 using TeamCashCenter.Data;
 using TeamCashCenter.Data.Model;
@@ -5,13 +7,46 @@ using TeamCashCenter.Helper;
 using TeamCashCenter.Services;
 using TeamCashCenter.Services.Contracts;
 
+using Serilog;
+using System.Reflection;
+using Serilog.Events;
+using Serilog.Sinks.SystemConsole.Themes;
+
 var builder = WebApplication.CreateBuilder(args);
+
+// determine data directory (from environment or default)
+var dataDir = builder.Configuration["DATA_DIR"] ?? Environment.GetEnvironmentVariable("DATA_DIR") ?? "./data";
+Directory.CreateDirectory(dataDir);
+var logDir = builder.Configuration["LOG_DIR"] ?? Environment.GetEnvironmentVariable("LOG_DIR") ?? "./logs";
+Directory.CreateDirectory(logDir);
+
+// common DB file path (used when no connection string provided)
+var dbFilePath = Path.Combine(dataDir, "TeamCashCenter.db");
+
+// configure Serilog to log to console and file in the mapped data folder
+Log.Logger = new LoggerConfiguration()
+    .Enrich.FromLogContext()
+    .MinimumLevel.Verbose()
+    .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+    .WriteTo.Console(theme: AnsiConsoleTheme.Code)
+    .WriteTo.File(Path.Combine(logDir, "applog-.log"), rollingInterval: Serilog.RollingInterval.Day)
+    .CreateLogger();
+
+builder.Host.UseSerilog();
+
+// Log resolved runtime paths early so they appear in boot logs
+Log.Information("Resolved paths: DATA_DIR={DataDir}, LOG_DIR={LogDir}, DB_FILE={DbFile}", dataDir, logDir, dbFilePath);
+
+// determine application version from assembly (informational version preferred)
+var entryAssembly = Assembly.GetEntryAssembly();
+var informationalVersion = entryAssembly?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+var assemblyVersion = entryAssembly?.GetName()?.Version?.ToString();
+var appVersion = informationalVersion ?? assemblyVersion ?? "unknown";
 
 // add blazor bootstrap
 builder.Services.AddBlazorBootstrap();
 
-// add logging
-builder.Logging.ClearProviders().AddConsole();
+// existing console/file logging handled by Serilog
 
 // Configure Kestrel to listen on HTTP and HTTPS for local development.
 // HTTPS will use the default development certificate (use `dotnet dev-certs https --trust` if needed).
@@ -43,8 +78,18 @@ builder.Services.AddSingleton<IEmailSender, MailKitEmailSender>();
 var appOptionsSection = builder.Configuration.GetSection("App");
 builder.Services.Configure<AppOptions>(appOptionsSection);
 
+// Determine DB connection: prefer configured connection string, else place DB file in mapped data directory
+var configured = builder.Configuration.GetConnectionString("DefaultConnection");
+var connectionString = configured;
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    var dbPath = Path.Combine(dataDir, "TeamCashCenter.db");
+    var dbDir = Path.GetDirectoryName(dbPath) ?? dataDir;
+    Directory.CreateDirectory(dbDir);
+    connectionString = $"Data Source={dbPath}";
+}
 builder.Services.AddDbContext<CashCenterContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection") ?? "Data Source=TeamCashCenter.db"));
+    options.UseSqlite(connectionString));
 
 builder.Services.AddIdentity<User, Role>(options => { options.SignIn.RequireConfirmedAccount = false; })
     .AddRoles<Role>()
@@ -107,6 +152,15 @@ app.MapBlazorHub();
 app.MapFallbackToPage("/_Host");
 app.MapControllers();
 
-app.Logger.LogInformation("Application started successfully");
+// Minimal /info endpoint for diagnostics
+app.MapGet("/info", () => new
+{
+    version = appVersion,
+    dataDir = dataDir,
+    logDir = logDir,
+    dbFile = dbFilePath
+});
+
+app.Logger.LogInformation("Application started successfully; DATA_DIR={DataDir}; LOG_DIR={LogDir}; DB_FILE={DbFile}", dataDir, logDir, dbFilePath);
 
 app.Run();
