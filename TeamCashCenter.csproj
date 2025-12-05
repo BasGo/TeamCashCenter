@@ -11,7 +11,7 @@
   </PropertyGroup>
   <PropertyGroup>
     <!-- Generate assembly info manually to avoid duplicate attribute generation with tool projects -->
-    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
   </PropertyGroup>
   
