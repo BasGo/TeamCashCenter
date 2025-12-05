@@ -1,5 +1,9 @@
 name: CI - Build and Publish Docker image
 
+permissions:
+  contents: read
+  packages: write
+
 on:
   push:
     tags:   # build on tags
