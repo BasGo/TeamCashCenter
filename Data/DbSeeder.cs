@@ -30,6 +30,11 @@ public static class DbSeeder
             db.Accounts.Add(new Account("Schiedsrichterkasse", "Auslagen für den Schiedsrichter", 0m, 2));
             db.Accounts.Add(new Account("Sonstiges", "Sonstige Auslagen", 0m));
         }
+        
+        if (!await db.Teams.AnyAsync())
+        {
+            db.Teams.Add(new Team { Name = "Beispielteam" });
+        }
 
         await db.SaveChangesAsync();
     }

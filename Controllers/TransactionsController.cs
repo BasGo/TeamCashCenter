@@ -6,17 +6,13 @@ using TeamCashCenter.Models;
 namespace TeamCashCenter.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
-    public class TransactionsController : ControllerBase
+    [Route("api/{teamId}/[controller]")]
+    [BindProperties]
+    public class TransactionsController(CashCenterContext db) : ControllerBase
     {
-        private readonly CashCenterContext _db;
+        private readonly CashCenterContext _db = db;
 
-        public TransactionsController(CashCenterContext db)
-        {
-            _db = db;
-        }
-        
-            // GET: api/transactions/export/excel
+        // GET: api/transactions/export/excel
             [HttpGet("export/excel")]
             public async Task<IActionResult> ExportToExcel(
                 DateTime? from = null,
@@ -24,10 +20,13 @@ namespace TeamCashCenter.Controllers
                 Guid? accountId = null,
                 Guid? userId = null)
             {
+                // Get teamId from route
+                var teamIdStr = (string?)RouteData.Values["teamId"];
+                Guid teamId = Guid.TryParse(teamIdStr, out var tid) ? tid : Guid.Empty;
                 var query = _db.Transactions
                     .AsNoTracking()
                     .Include(t => t.Account)
-                    .Include(t => t.User)
+                    .Where(t => t.TeamId == teamId)
                     .AsQueryable();
 
                 if (from.HasValue)
@@ -90,11 +89,14 @@ namespace TeamCashCenter.Controllers
         {
             if (page < 1) page = 1;
             if (pageSize < 1) pageSize = 20;
-
+            // Get teamId from route
+            var teamIdStr = (string?)RouteData.Values["teamId"];
+            var teamId = Guid.TryParse(teamIdStr, out var tid) ? tid : Guid.Empty;
             var query = _db.Transactions
                 .AsNoTracking()
                 .Include(t => t.Account)
                 .Include(t => t.User)
+                .Where(t => t.TeamId == teamId)
                 .AsQueryable();
 
             if (from.HasValue)

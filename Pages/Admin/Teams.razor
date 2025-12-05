@@ -1,0 +1,181 @@
+
+@page "/admin/teams"
+@using TeamCashCenter.Data.Model
+@using TeamCashCenter.Data
+@using TeamCashCenter.Services
+@inject TeamService TeamService
+@attribute [Authorize(Roles = "Admin")]
+
+<h2>Team Administration</h2>
+
+@if (teams is null)
+{
+    <p>Lade Teams ...</p>
+}
+else
+{
+    <table class="table table-bordered">
+        <thead>
+            <tr><th>Name</th><th>Aktionen</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var t in teams)
+            {
+                <tr>
+                    <td>@t.Name</td>
+                    <td>
+                        <button class="btn btn-sm btn-secondary" @onclick="() => EditTeam(t.Id)">Bearbeiten</button>
+                        <button class="btn btn-sm btn-danger" @onclick="() => DeleteTeam(t.Id)">Löschen</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    <button class="btn btn-primary" @onclick="ShowAddTeam">Team hinzufügen</button>
+}
+
+@if (editTeamId.HasValue)
+{
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Team bearbeiten</h5>
+                    <button type="button" class="btn-close" @onclick="CancelEditTeam"></button>
+                </div>
+                <div class="modal-body">
+                    <input class="form-control" @bind="editTeamName" placeholder="Teamname" />
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary" @onclick="SaveEditTeam">Speichern</button>
+                    <button class="btn btn-secondary" @onclick="CancelEditTeam">Abbrechen</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (deleteTeamId.HasValue)
+{
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Team löschen</h5>
+                </div>
+                <div class="modal-body">
+                    <p>Möchten Sie dieses Team wirklich löschen?</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-danger" @onclick="ConfirmDeleteTeam">Löschen</button>
+                    <button class="btn btn-secondary" @onclick="CancelDeleteTeam">Abbrechen</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showAddTeam)
+{
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Neues Team hinzufügen</h5>
+                    <button type="button" class="btn-close" @onclick="CancelAddTeam"></button>
+                </div>
+                <div class="modal-body">
+                    <input class="form-control" @bind="newTeamName" placeholder="Teamname" />
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary" @onclick="SaveNewTeam">Hinzufügen</button>
+                    <button class="btn btn-secondary" @onclick="CancelAddTeam">Abbrechen</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Team>? teams;
+    private string newTeamName = string.Empty;
+    private Guid? editTeamId;
+    private string editTeamName = string.Empty;
+    private Guid? deleteTeamId;
+    private bool showAddTeam = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        teams = await TeamService.GetTeamsAsync();
+    }
+
+    private void ShowAddTeam()
+    {
+        showAddTeam = true;
+        newTeamName = string.Empty;
+    }
+
+    private void CancelAddTeam()
+    {
+        showAddTeam = false;
+        newTeamName = string.Empty;
+    }
+
+    private async Task SaveNewTeam()
+    {
+        if (!string.IsNullOrWhiteSpace(newTeamName))
+        {
+            await TeamService.AddTeamAsync(newTeamName);
+            teams = await TeamService.GetTeamsAsync();
+            showAddTeam = false;
+            newTeamName = string.Empty;
+        }
+    }
+
+    private void EditTeam(Guid id)
+    {
+        var team = teams?.FirstOrDefault(t => t.Id == id);
+        if (team != null)
+        {
+            editTeamId = id;
+            editTeamName = team.Name;
+        }
+    }
+
+    private void CancelEditTeam()
+    {
+        editTeamId = null;
+        editTeamName = string.Empty;
+    }
+
+    private async Task SaveEditTeam()
+    {
+        if (editTeamId.HasValue && !string.IsNullOrWhiteSpace(editTeamName))
+        {
+            await TeamService.UpdateTeamAsync(editTeamId.Value, editTeamName);
+            teams = await TeamService.GetTeamsAsync();
+            editTeamId = null;
+            editTeamName = string.Empty;
+        }
+    }
+
+    private void DeleteTeam(Guid id)
+    {
+        deleteTeamId = id;
+    }
+
+    private void CancelDeleteTeam()
+    {
+        deleteTeamId = null;
+    }
+
+    private async Task ConfirmDeleteTeam()
+    {
+        if (deleteTeamId.HasValue)
+        {
+            await TeamService.DeleteTeamAsync(deleteTeamId.Value);
+            teams = await TeamService.GetTeamsAsync();
+            deleteTeamId = null;
+        }
+    }
+}

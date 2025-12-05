@@ -13,7 +13,9 @@ public class CashCenterContext(DbContextOptions<CashCenterContext> options) : Id
     public DbSet<Transaction> Transactions => Set<Transaction>();
     public DbSet<Transfer> Transfers => Set<Transfer>();
     public DbSet<TransactionType> TransactionTypes => Set<TransactionType>();
-    public DbSet<PaymentLog> PaymentLogs => Set<PaymentLog>();
+    
+    public DbSet<Team> Teams => Set<Team>();
+    public DbSet<UserTeam> UserTeams => Set<UserTeam>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -26,5 +28,19 @@ public class CashCenterContext(DbContextOptions<CashCenterContext> options) : Id
         modelBuilder.Entity<IdentityUserLogin<Guid>>(u => u.ToTable("UserLogins"));
         modelBuilder.Entity<IdentityUserRole<Guid>>(u => u.ToTable("UserRoles"));
         modelBuilder.Entity<IdentityUserToken<Guid>>(u => u.ToTable("UserTokens"));
+        
+        // Configure many-to-many relationship between Users and Teams
+        modelBuilder.Entity<UserTeam>()
+            .HasKey(ut => new { ut.UserId, ut.TeamId });
+        
+        modelBuilder.Entity<UserTeam>()
+            .HasOne(ut => ut.User)
+            .WithMany(u => u.UserTeams)
+            .HasForeignKey(ut => ut.UserId);
+        
+        modelBuilder.Entity<UserTeam>()
+            .HasOne(ut => ut.Team)
+            .WithMany(t => t.UserTeams)
+            .HasForeignKey(ut => ut.TeamId);
     }
 }

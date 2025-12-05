@@ -22,6 +22,11 @@ public class Transaction
     [Required]
     [StringLength(150)]
     public string Description { get; set; } = null!;
+
+    /// <summary>
+    /// Team ID for multi-team support
+    /// </summary>
+    public Guid TeamId { get; set; }
     
     [Required]
     public Guid AccountId { get; set; }

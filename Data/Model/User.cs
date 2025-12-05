@@ -6,29 +6,23 @@ namespace TeamCashCenter.Data.Model;
 public class User : IdentityUser<Guid>
 {
     // Extend with additional profile fields if needed
-    
-    [Required]
-    [StringLength(50)]
-    public string FirstName { get; set; } = null!;
 
-    [Required]
-    [StringLength(50)]
-    public string LastName { get; set; } = null!;
+    [Required] [StringLength(50)] public string FirstName { get; set; } = null!;
 
-    [Range(0, 99)]
-    public int? JerseyNumber { get; set; }
+    [Required] [StringLength(50)] public string LastName { get; set; } = null!;
 
-    [DataType(DataType.Date)]
-    public DateTime? BirthDate { get; set; }
+    [Range(0, 99)] public int? JerseyNumber { get; set; }
 
-    [StringLength(50)]
-    public string? PassportNumber { get; set; }
+    [DataType(DataType.Date)] public DateTime? BirthDate { get; set; }
+
+    [StringLength(50)] public string? PassportNumber { get; set; }
 
     public ICollection<Membership>? Memberships { get; set; }
     public ICollection<Payment>? Payments { get; set; }
     public ICollection<Transaction>? Transactions { get; set; }
-    
-    public bool HasKey =>  Id != Guid.Empty;
-    
+    public ICollection<UserTeam>? UserTeams { get; set; }
+
+    public bool HasKey => Id != Guid.Empty;
+
     public string DisplayName => FirstName + " " + LastName;
 }

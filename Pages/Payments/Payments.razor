@@ -267,9 +267,7 @@ else
         lastAccountId = selectedAccountId;
         lastPaymentId = payTarget.Id;
         showUndo = true;
-        // create payment log
-        var log = new PaymentLog { Action = "Payment", TransactionId = t.Id, AccountId = selectedAccountId, PaymentId = payTarget.Id, Amount = t.Amount, Notes = "Paid via modal" };
-        Db.PaymentLogs.Add(log);
+
         await Db.SaveChangesAsync();
 
         // show toast instead of alert
@@ -311,11 +309,6 @@ else
                 Db.Payments.Update(pp);
             }
             
-            await Db.SaveChangesAsync();
-
-            // log undo
-            var ulog = new PaymentLog { Action = "Undo", TransactionId = tx.Id, AccountId = tx.AccountId, PaymentId = tx.Reference, Amount = -tx.Amount, Notes = "Undo via UI" };
-            Db.PaymentLogs.Add(ulog);
             await Db.SaveChangesAsync();
         }
 

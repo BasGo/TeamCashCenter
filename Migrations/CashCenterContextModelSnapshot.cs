@@ -15,7 +15,7 @@ namespace TeamCashCenter.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "8.0.0");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.0");
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
                 {
@@ -168,6 +168,9 @@ namespace TeamCashCenter.Migrations
                     b.Property<DateTime>("StartDate")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("TeamId")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("UserId")
                         .HasColumnType("TEXT");
 
@@ -203,6 +206,9 @@ namespace TeamCashCenter.Migrations
                     b.Property<Guid?>("MembershipId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("TeamId")
+                        .HasColumnType("TEXT");
+
                     b.Property<int?>("TransactionTypeId")
                         .HasColumnType("INTEGER");
 
@@ -218,42 +224,6 @@ namespace TeamCashCenter.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("Payments");
-                });
-
-            modelBuilder.Entity("TeamCashCenter.Data.Model.PaymentLog", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<Guid?>("AccountId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Action")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("TEXT");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Notes")
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid?>("PaymentId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("Timestamp")
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid?>("TransactionId")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("PaymentLogs");
                 });
 
             modelBuilder.Entity("TeamCashCenter.Data.Model.Role", b =>
@@ -287,6 +257,22 @@ namespace TeamCashCenter.Migrations
                     b.ToTable("Roles", (string)null);
                 });
 
+            modelBuilder.Entity("TeamCashCenter.Data.Model.Team", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Teams");
+                });
+
             modelBuilder.Entity("TeamCashCenter.Data.Model.Transaction", b =>
                 {
                     b.Property<Guid>("Id")
@@ -317,6 +303,9 @@ namespace TeamCashCenter.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("Reference")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TeamId")
                         .HasColumnType("TEXT");
 
                     b.Property<Guid?>("UserId")
@@ -474,6 +463,21 @@ namespace TeamCashCenter.Migrations
                     b.ToTable("Users", (string)null);
                 });
 
+            modelBuilder.Entity("TeamCashCenter.Data.Model.UserTeam", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TeamId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("UserId", "TeamId");
+
+                    b.HasIndex("TeamId");
+
+                    b.ToTable("UserTeams");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
                 {
                     b.HasOne("TeamCashCenter.Data.Model.Role", null)
@@ -607,6 +611,25 @@ namespace TeamCashCenter.Migrations
                     b.Navigation("TargetAccount");
                 });
 
+            modelBuilder.Entity("TeamCashCenter.Data.Model.UserTeam", b =>
+                {
+                    b.HasOne("TeamCashCenter.Data.Model.Team", "Team")
+                        .WithMany("UserTeams")
+                        .HasForeignKey("TeamId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TeamCashCenter.Data.Model.User", "User")
+                        .WithMany("UserTeams")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Team");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("TeamCashCenter.Data.Model.Account", b =>
                 {
                     b.Navigation("Transactions");
@@ -615,6 +638,11 @@ namespace TeamCashCenter.Migrations
             modelBuilder.Entity("TeamCashCenter.Data.Model.Payment", b =>
                 {
                     b.Navigation("Transactions");
+                });
+
+            modelBuilder.Entity("TeamCashCenter.Data.Model.Team", b =>
+                {
+                    b.Navigation("UserTeams");
                 });
 
             modelBuilder.Entity("TeamCashCenter.Data.Model.Transaction", b =>
@@ -629,6 +657,8 @@ namespace TeamCashCenter.Migrations
                     b.Navigation("Payments");
 
                     b.Navigation("Transactions");
+
+                    b.Navigation("UserTeams");
                 });
 #pragma warning restore 612, 618
         }

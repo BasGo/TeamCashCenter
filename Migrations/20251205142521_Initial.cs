@@ -29,26 +29,6 @@ namespace TeamCashCenter.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "PaymentLogs",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "INTEGER", nullable: false)
-                        .Annotation("Sqlite:Autoincrement", true),
-                    Timestamp = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    Action = table.Column<string>(type: "TEXT", nullable: false),
-                    TransactionId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    AccountId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    PaymentId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    Amount = table.Column<decimal>(type: "TEXT", nullable: false),
-                    Notes = table.Column<string>(type: "TEXT", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "INTEGER", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PaymentLogs", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "Roles",
                 columns: table => new
                 {
@@ -61,6 +41,18 @@ namespace TeamCashCenter.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Roles", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Teams",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Name = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Teams", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -166,6 +158,7 @@ namespace TeamCashCenter.Migrations
                     MonthlyFee = table.Column<decimal>(type: "TEXT", nullable: false),
                     StartDate = table.Column<DateTime>(type: "TEXT", nullable: false),
                     EndDate = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    TeamId = table.Column<Guid>(type: "TEXT", nullable: false),
                     UserId = table.Column<Guid>(type: "TEXT", nullable: true)
                 },
                 constraints: table =>
@@ -250,6 +243,30 @@ namespace TeamCashCenter.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "UserTeams",
+                columns: table => new
+                {
+                    UserId = table.Column<Guid>(type: "TEXT", nullable: false),
+                    TeamId = table.Column<Guid>(type: "TEXT", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_UserTeams", x => new { x.UserId, x.TeamId });
+                    table.ForeignKey(
+                        name: "FK_UserTeams_Teams_TeamId",
+                        column: x => x.TeamId,
+                        principalTable: "Teams",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_UserTeams_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "UserTokens",
                 columns: table => new
                 {
@@ -280,7 +297,8 @@ namespace TeamCashCenter.Migrations
                     UserId = table.Column<Guid>(type: "TEXT", nullable: true),
                     MembershipId = table.Column<Guid>(type: "TEXT", nullable: true),
                     IsPaid = table.Column<bool>(type: "INTEGER", nullable: false),
-                    TransactionTypeId = table.Column<int>(type: "INTEGER", nullable: true)
+                    TransactionTypeId = table.Column<int>(type: "INTEGER", nullable: true),
+                    TeamId = table.Column<Guid>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -312,6 +330,7 @@ namespace TeamCashCenter.Migrations
                     BookingDate = table.Column<DateTime>(type: "TEXT", nullable: false),
                     Amount = table.Column<decimal>(type: "TEXT", nullable: false),
                     Description = table.Column<string>(type: "TEXT", maxLength: 150, nullable: false),
+                    TeamId = table.Column<Guid>(type: "TEXT", nullable: false),
                     AccountId = table.Column<Guid>(type: "TEXT", nullable: false),
                     UserId = table.Column<Guid>(type: "TEXT", nullable: true),
                     Reference = table.Column<Guid>(type: "TEXT", nullable: false),
@@ -434,14 +453,16 @@ namespace TeamCashCenter.Migrations
                 table: "Users",
                 column: "NormalizedUserName",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_UserTeams_TeamId",
+                table: "UserTeams",
+                column: "TeamId");
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropTable(
-                name: "PaymentLogs");
-
             migrationBuilder.DropTable(
                 name: "RoleClaims");
 
@@ -461,6 +482,9 @@ namespace TeamCashCenter.Migrations
                 name: "UserRoles");
 
             migrationBuilder.DropTable(
+                name: "UserTeams");
+
+            migrationBuilder.DropTable(
                 name: "UserTokens");
 
             migrationBuilder.DropTable(
@@ -468,6 +492,9 @@ namespace TeamCashCenter.Migrations
 
             migrationBuilder.DropTable(
                 name: "Accounts");
+
+            migrationBuilder.DropTable(
+                name: "Teams");
 
             migrationBuilder.DropTable(
                 name: "Memberships");

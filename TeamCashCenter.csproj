@@ -4,8 +4,6 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <PublishTrimmed>true</PublishTrimmed>
-    <TrimMode>partial</TrimMode>
     <RootNamespace>TeamCashCenter</RootNamespace>
     <AssemblyName>TeamCashCenter</AssemblyName>
   </PropertyGroup>

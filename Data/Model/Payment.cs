@@ -29,7 +29,12 @@ public class Payment
     public TransactionType? TransactionType { get; set; }
     
     public ICollection<Transaction>? Transactions { get; set; }
-
+    
+    /// <summary>
+    /// Team ID for multi-team support
+    /// </summary>
+    public Guid TeamId { get; set; }
+    
     public List<Payment> CreateNewForUsers(IEnumerable<Guid> userIds)
     {
         return userIds.Select(u => new Payment
@@ -41,6 +46,7 @@ public class Payment
             MembershipId = this.MembershipId,
             TransactionTypeId = this.TransactionTypeId,
             IsPaid = this.IsPaid,
+
             UserId = u
         }).ToList();
     }

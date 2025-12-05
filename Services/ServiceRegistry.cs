@@ -12,6 +12,7 @@ public static class ServiceRegistry
         services.AddScoped<ITransferService, TransferService>();
         services.AddScoped<IMembershipService, MembershipService>();
         services.AddScoped<IPaymentService, PaymentService>();
+            services.AddScoped<TeamService>();
         return services;
     }
 }
