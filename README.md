@@ -5,7 +5,7 @@ Blazor Server Anwendung zur Verwaltung einer Mannschaftskasse. SQLite als Datenb
 Quickstart:
 
 
-1. .NET 8 SDK installieren
+1. .NET 10 SDK installieren
 
 2. Abhängigkeiten wiederherstellen:
 
@@ -33,14 +33,20 @@ dotnet tool install --global dotnet-ef
 dotnet run
 ```
 
-5. Docker build:
+5. Docker build (runtime: .NET 10):
 
 ```bash
-docker build -t mannschaftskasse:latest .
+docker build -t mannschaftskasse:10 .
+```
+
+Alternatively use Docker Compose which maps `./data` and `./logs` for persistence:
+
+```bash
+docker compose up --build
 ```
 
 Hinweise:
-- Die Anwendung verwendet SQLite (`mannschaftskasse.db`) im Projektordner.
+- The application uses SQLite. By default the DB file will be created in `./data/TeamCashCenter.db` when running in Docker or locally.
 - Für Azure-Deployment: Docker-Image erstellen und in Azure Web App for Containers oder Azure Container Apps deployen.
 
 UI Hinweise:

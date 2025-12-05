@@ -12,7 +12,7 @@ COPY . .
 WORKDIR /src
 RUN dotnet publish "TeamCashCenter.csproj" -c Release -r linux-x64 -o /app/publish --self-contained false /p:PublishTrimmed=true /p:TrimMode=link --no-restore
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine
+FROM mcr.microsoft.com/dotnet/aspnet:10.0
 ENV DOTNET_RUNNING_IN_CONTAINER=true
 ENV ASPNETCORE_URLS=http://+:80
 
@@ -27,7 +27,7 @@ ENV ASPNETCORE_URLS=http://+:80
 #   Email__AdminContact=admin@example.com
 #   Email__ResetTokenExpiryHours=24
 
-# add minimal tooling for healthcheck
+# add minimal tooling for healthcheck (Debian)
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
 	&& rm -rf /var/lib/apt/lists/*
 
