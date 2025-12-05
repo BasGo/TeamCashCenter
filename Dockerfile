@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # copy only project files for restore
@@ -12,7 +12,7 @@ COPY . .
 WORKDIR /src
 RUN dotnet publish "TeamCashCenter.csproj" -c Release -r linux-x64 -o /app/publish --self-contained false /p:PublishTrimmed=true /p:TrimMode=link --no-restore
 
-FROM mcr.microsoft.com/dotnet/aspnet:8.0-jammy
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine
 ENV DOTNET_RUNNING_IN_CONTAINER=true
 ENV ASPNETCORE_URLS=http://+:80
 
